@@ -1,12 +1,12 @@
 <p align="center"><img src="docs/img/nifikop.png" width="160"></p>
 
 <p align="center">
-  <a href="https://ghcr.io/konpyutaika/docker-images/nifikop/">
+  <a href="https://github.com/konpyutaika/nifikop/pkgs/container/docker-images%2Fnifikop">
     <img src="https://img.shields.io/github/v/release/konpyutaika/nifikop?style=shield&logo=docker" alt="Docker Automated build">
   </a>
 
   <a href="https://github.com/konpyutaika/nifikop">
-    <img src="https://img.shields.io/github/v/release/konpyutaika/nifikop?style=shield&logo=github" alt="Docker Automated build">
+    <img src="https://img.shields.io/github/v/release/konpyutaika/nifikop?style=shield&logo=github" alt="Releases">
   </a>
 
   <a href="https://circleci.com/gh/konpyutaika/nifikop">
