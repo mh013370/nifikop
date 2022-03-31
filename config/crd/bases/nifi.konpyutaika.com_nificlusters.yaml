@@ -35,6 +35,19 @@ spec:
           spec:
             description: NifiClusterSpec defines the desired state of NifiCluster
             properties:
+              autoScalingReplicaConfig:
+                description: node replica configuration
+                properties:
+                  replicaNodeConfigGroup:
+                    description: The id of the node config group to apply to each
+                      replica.
+                    type: string
+                  replicas:
+                    description: The number of Nodes to create. This should not be
+                      specified if Nodes is specified.
+                    format: int32
+                    type: integer
+                type: object
               clientType:
                 description: clientType defines if the operator will use basic or
                   tls authentication to query the NiFi cluster.
@@ -8236,6 +8249,10 @@ spec:
                 - id
                 - version
                 type: object
+              replicas:
+                description: the current number of replicas in this cluster
+                format: int32
+                type: integer
               rollingUpgradeStatus:
                 description: RollingUpgradeStatus defines status of rolling upgrade
                 properties:
@@ -8251,16 +8268,26 @@ spec:
                 description: RootProcessGroupId contains the uuid of the root process
                   group for this cluster
                 type: string
+              selector:
+                description: label selectors for cluster child pods. HPA uses this
+                  to identify pod replicas
+                type: string
               state:
                 description: ClusterState holds info about the cluster state
                 type: string
             required:
+            - replicas
+            - selector
             - state
             type: object
         type: object
     served: true
     storage: true
     subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.autoScalingReplicaConfig.replicas
+        statusReplicasPath: .status.replicas
       status: {}
 status:
   acceptedNames:

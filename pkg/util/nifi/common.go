@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	PrefixNodeNameTemplate = "%s-"
-	SuffixNodeNameTemplate = "-node"
-	RootNodeNameTemplate   = "%d"
-	NodeNameTemplate       = PrefixNodeNameTemplate + RootNodeNameTemplate + SuffixNodeNameTemplate
+	PrefixNodeNameTemplate  = "%s"
+	SuffixNodeNameTemplate  = "-node"
+	ReplicaSuffix		    = "-replica"
+	RootNodeNameTemplate    = "-%d"
+	NodeNameTemplate        = PrefixNodeNameTemplate + RootNodeNameTemplate + SuffixNodeNameTemplate
+	ReplicaNodeNameTemplate = PrefixNodeNameTemplate + ReplicaSuffix + RootNodeNameTemplate + SuffixNodeNameTemplate 
 
 	// TimeStampLayout defines the date format used.
 	TimeStampLayout = "Mon, 2 Jan 2006 15:04:05 GMT"
@@ -37,8 +39,12 @@ func ParseStringToInt32(nodeId string) (int32, error) {
 
 // > RequestNiFI
 // >> Node
-func ComputeNodeName(nodeId int32, clusterName string) string {
-	return fmt.Sprintf(NodeNameTemplate, clusterName, nodeId)
+func ComputeNodeName(nodeId int32, clusterName string, isReplica bool) string {
+	if isReplica {
+		return fmt.Sprintf(ReplicaNodeNameTemplate, clusterName, nodeId)
+	} else {
+		return fmt.Sprintf(NodeNameTemplate, clusterName, nodeId)
+	}
 }
 
 func ComputeRequestNiFiNodeService(nodeId int32, clusterName string,
@@ -272,4 +278,15 @@ func determineInternalListenerForComm(internalListeners []v1alpha1.InternalListe
 // belonging to the given Nifi CR name.
 func LabelsForNifi(name string) map[string]string {
 	return map[string]string{"app": "nifi", "nifi_cr": name}
+}
+
+
+// LabelsForNifiReplicas returns the labels for selecting the resources
+// belonging to the given Nifi CR name.
+func LabelsForNifiReplicas(name string) map[string]string {
+	return map[string]string{
+		"app": "nifi", 
+		"nifi_cr": name,
+
+	}
 }

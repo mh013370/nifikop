@@ -20,8 +20,8 @@ func (r *Reconciler) service(id int32, log logr.Logger) runtimeClient.Object {
 	usedPorts := generateServicePortForInternalListeners(r.NifiCluster.Spec.ListenersConfig.InternalListeners)
 
 	return &corev1.Service{
-		ObjectMeta: templates.ObjectMetaWithAnnotations(nifiutil.ComputeNodeName(id, r.NifiCluster.Name),
-			//fmt.Sprintf("%s-%d", r.NifiCluster.Name, id),
+		ObjectMeta: templates.ObjectMetaWithAnnotations(
+			nifiutil.ComputeNodeName(id, r.NifiCluster.Name),
 			util.MergeLabels(
 				r.NifiCluster.Spec.Service.Labels,
 				nifiutil.LabelsForNifi(r.NifiCluster.Name),

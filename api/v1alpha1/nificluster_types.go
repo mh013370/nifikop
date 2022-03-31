@@ -76,6 +76,8 @@ type NifiClusterSpec struct {
 	NodeUserIdentityTemplate *string `json:"nodeUserIdentityTemplate,omitempty"`
 	// all node requires an image, unique id, and storageConfigs settings
 	Nodes []Node `json:"nodes"`
+	// node replica configuration
+	AutoScalingConfig AutoScalingConfig `json:"autoScalingConfig,omitempty"`
 	// Defines the configuration for PodDisruptionBudget
 	DisruptionBudget DisruptionBudget `json:"disruptionBudget,omitempty"`
 	// LdapConfiguration specifies the configuration if you want to use LDAP
@@ -100,6 +102,19 @@ type NifiClusterSpec struct {
 	ControllerUserIdentity *string `json:"controllerUserIdentity,omitempty"`
 
 	// @TODO: Block Controller change
+}
+
+// configuration to be used if replica-style deployment is used.
+type AutoScalingConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// The number of Nodes to create. This should not be specified if Nodes is specified.
+	Replicas int32 `json:"replicas,omitempty"`
+	// The id of the node config group to apply to each replica.
+	ReplicaNodeConfigGroup string `json:"replicaNodeConfigGroup,omitempty"`
+	// +kubebuilder:validation:Enum={"graceful","simple"}
+	UpscaleStrategy ClusterScalingStrategy `json:"upscaleStrategy,omitempty"`
+	// +kubebuilder:validation:Enum={"lifo","nonprimary","leastbusy"}
+	DownscaleStrategy ClusterScalingStrategy `json:"downscaleStrategy,omitempty"`
 }
 
 // DisruptionBudget defines the configuration for PodDisruptionBudget
@@ -491,6 +506,10 @@ type NifiClusterStatus struct {
 	RootProcessGroupId string `json:"rootProcessGroupId,omitempty"`
 	// PrometheusReportingTask contains the status of the prometheus reporting task managed by the operator
 	PrometheusReportingTask PrometheusReportingTaskStatus `json:"prometheusReportingTask,omitempty"`
+	// the current number of replicas in this cluster
+	Replicas ClusterReplicas `json:"replicas"`
+	// label selectors for cluster child pods. HPA uses this to identify pod replicas
+	Selector ClusterReplicaSelector `json:"selector"`
 }
 
 type PrometheusReportingTaskStatus struct {
@@ -502,6 +521,7 @@ type PrometheusReportingTaskStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:subresource:scale:specpath=.spec.autoScalingConfig.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 
 // NifiCluster is the Schema for the nificlusters API
 type NifiCluster struct {

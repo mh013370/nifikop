@@ -2,6 +2,8 @@ package v1alpha1
 
 import (
 	"fmt"
+
+	"github.com/coreos/etcd/pkg/stringutil"
 )
 
 // DataflowState defines the state of a NifiDataflow
@@ -24,6 +26,15 @@ type ActionStep string
 
 // ClusterState holds info about the cluster state
 type ClusterState string
+
+// ClusterReplicas holds info about the current number of replicas in the cluster
+type ClusterReplicas int32
+
+// ClusterReplicaSelector holds info about the pod selector for cluster replicas
+type ClusterReplicaSelector string
+
+// ClusterScalingStrategy holds info about how a cluster should be scaled
+type ClusterScalingStrategy string
 
 // ConfigurationState holds info about the configuration state
 type ConfigurationState string
@@ -359,6 +370,17 @@ const (
 	NifiClusterRollingUpgrading ClusterState = "ClusterRollingUpgrading"
 	// NifiClusterRunning states that the cluster is in running state
 	NifiClusterRunning ClusterState = "ClusterRunning"
+
+	// upscale strategy representing 'Scale > Disconnect the nodes > Offload data > Reconnect the node' strategy
+	GracefulClusterUpscaleStrategy ClusterScalingStrategy = "graceful"
+	// simply add a node to the cluster and nothing else
+	SimpleClusterUpscaleStrategy ClusterScalingStrategy = "simple"
+	// downscale strategy to remove the last node added
+	LIFOClusterDownscaleStrategy ClusterScalingStrategy = "lifo"
+	// downscale strategy avoiding primary/coordinator nodes
+	NonPrimaryClusterDownscaleStrategy ClusterScalingStrategy = "nonprimary"
+	// downscale strategy targeting nodes which are least busy in terms of # flowfiles in queues
+	LeastBusyClusterDownscaleStrategy ClusterScalingStrategy = "leastbusy"
 
 	// ConfigInSync states that the generated nodeConfig is in sync with the Node
 	ConfigInSync ConfigurationState = "ConfigInSync"

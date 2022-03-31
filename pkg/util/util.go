@@ -160,6 +160,16 @@ func ParsePropertiesFormat(properties string) map[string]string {
 	return config
 }
 
+// Get the node configuration for the auto scale group
+func GetAutoScalingNodeConfig(clusterSpec v1alpha1.NifiClusterSpec) (*v1alpha1.NodeConfig, error) {
+	nConfig := &v1alpha1.NodeConfig{}
+	err := mergo.Merge(nConfig, clusterSpec.NodeConfigGroups[clusterSpec.AutoScalingReplicaConfig.ReplicaNodeConfigGroup], mergo.WithAppendSlice)
+	if err != nil {
+		return nil, errors.WrapIf(err, "could not merge autoScalingReplicaNodeConfig with ConfigGroup")
+	}
+	return nConfig, nil
+}
+
 // GetNodeConfig compose the nodeConfig for a given nifi node
 func GetNodeConfig(node v1alpha1.Node, clusterSpec v1alpha1.NifiClusterSpec) (*v1alpha1.NodeConfig, error) {
 

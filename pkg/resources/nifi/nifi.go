@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers/dataflow"
@@ -92,6 +94,73 @@ func (r *Reconciler) Reconcile(log logr.Logger) error {
 		log.V(1).Info("Reconciled")
 		return nil
 	}
+
+	if r.NifiCluster.Spec.AutoScalingConfig.Enabled {
+		log.Info("Autoscaling is enabled, so ignoring any spec.nodes configuration")
+		if err := r.updateReplicaStatus(log); err != nil {
+			return errors.WrapIf(err, "Failed to update replica status")
+		}
+		
+		if err := r.reconcileAutoscale(log); err != nil {
+			return errors.WrapIf(err, "Failed to reconcile autoscaling")
+		}
+
+	} else {
+		log.Info("Using static spec.nodes configuration")
+		for _, node := range r.NifiCluster.Spec.Nodes {
+			// We need to grab names for servers and client in case user is enabling ACLs
+			// That way we can continue to manage dataflows and users
+			serverPass, clientPass, superUsers, err := r.getServerAndClientDetails(node.Id)
+			if err != nil {
+				return err
+			}
+
+			nodeConfig, err := util.GetNodeConfig(node, r.NifiCluster.Spec)
+			if err != nil {
+				return errors.WrapIf(err, "failed to reconcile resource")
+			}
+			for _, storage := range nodeConfig.StorageConfigs {
+				o := r.pvc(node.Id, storage, log)
+				err := r.reconcileNifiPVC(log, o.(*corev1.PersistentVolumeClaim))
+				if err != nil {
+					return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+				}
+
+			}
+
+			o := r.secretConfig(node.Id, nodeConfig, serverPass, clientPass, superUsers, log)
+			err = k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
+			if err != nil {
+				return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+			}
+
+			pvcs, err := getCreatedPVCForNode(r.Client, node.Id, r.NifiCluster.Namespace, r.NifiCluster.Name)
+			if err != nil {
+				return errors.WrapIfWithDetails(err, "failed to list PVC's")
+			}
+
+			if !r.NifiCluster.Spec.Service.HeadlessEnabled {
+				o := r.service(node.Id, log)
+				err := k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
+				if err != nil {
+					return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+				}
+			}
+			o = r.pod(node.Id, nodeConfig, pvcs, log)
+			err, isReady := r.reconcileNifiPod(log, o.(*corev1.Pod))
+			if err != nil {
+				return err
+			}
+			if nodeState, ok := r.NifiCluster.Status.NodesState[o.(*corev1.Pod).Labels["nodeId"]]; ok &&
+				nodeState.PodIsReady != isReady {
+				if err = k8sutil.UpdateNodeStatus(r.Client, []string{o.(*corev1.Pod).Labels["nodeId"]}, r.NifiCluster, isReady, log); err != nil {
+					return errors.WrapIfWithDetails(err, "could not update status for node(s)",
+						"id(s)", o.(*corev1.Pod).Labels["nodeId"])
+				}
+			}
+		}
+	}
+
 	// TODO : manage external LB
 	uniqueHostnamesMap := make(map[string]struct{})
 
@@ -129,59 +198,7 @@ func (r *Reconciler) Reconcile(log logr.Logger) error {
 		}
 	}
 
-	for _, node := range r.NifiCluster.Spec.Nodes {
-		// We need to grab names for servers and client in case user is enabling ACLs
-		// That way we can continue to manage dataflows and users
-		serverPass, clientPass, superUsers, err := r.getServerAndClientDetails(node.Id)
-		if err != nil {
-			return err
-		}
-
-		nodeConfig, err := util.GetNodeConfig(node, r.NifiCluster.Spec)
-		if err != nil {
-			return errors.WrapIf(err, "failed to reconcile resource")
-		}
-		for _, storage := range nodeConfig.StorageConfigs {
-			o := r.pvc(node.Id, storage, log)
-			err := r.reconcileNifiPVC(log, o.(*corev1.PersistentVolumeClaim))
-			if err != nil {
-				return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
-			}
-
-		}
-
-		o := r.secretConfig(node.Id, nodeConfig, serverPass, clientPass, superUsers, log)
-		err = k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
-		if err != nil {
-			return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
-		}
-
-		pvcs, err := getCreatedPVCForNode(r.Client, node.Id, r.NifiCluster.Namespace, r.NifiCluster.Name)
-		if err != nil {
-			return errors.WrapIfWithDetails(err, "failed to list PVC's")
-		}
-
-		if !r.NifiCluster.Spec.Service.HeadlessEnabled {
-			o := r.service(node.Id, log)
-			err := k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
-			if err != nil {
-				return errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
-			}
-		}
-		o = r.pod(node.Id, nodeConfig, pvcs, log)
-		err, isReady := r.reconcileNifiPod(log, o.(*corev1.Pod))
-		if err != nil {
-			return err
-		}
-		if nodeState, ok := r.NifiCluster.Status.NodesState[o.(*corev1.Pod).Labels["nodeId"]]; ok &&
-			nodeState.PodIsReady != isReady {
-			if err = k8sutil.UpdateNodeStatus(r.Client, []string{o.(*corev1.Pod).Labels["nodeId"]}, r.NifiCluster, isReady, log); err != nil {
-				return errors.WrapIfWithDetails(err, "could not update status for node(s)",
-					"id(s)", o.(*corev1.Pod).Labels["nodeId"])
-			}
-		}
-	}
-
+	
 	var err error
 	// Reconcile external services
 	services := r.externalServices(log)
@@ -257,6 +274,155 @@ func (r *Reconciler) Reconcile(log logr.Logger) error {
 	log.V(1).Info("Reconciled")
 
 	return nil
+}
+
+func (r *Reconciler) updateReplicaStatus(log logr.Logger) error {
+	podList := &corev1.PodList{}
+	matchingLabels := client.MatchingLabels(nifiutil.LabelsForNifiReplicas(r.NifiCluster.Name))
+
+	err := r.Client.List(context.TODO(), podList,
+		client.ListOption(client.InNamespace(r.NifiCluster.Namespace)), client.ListOption(matchingLabels))
+	if err != nil {
+		return errors.WrapIf(err, "failed to reconcile resource")
+	}
+
+	replicas := v1alpha1.ClusterReplicas(int32(podList.Size()))
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: matchingLabels,
+	})
+	if err != nil {
+		return errors.WrapIf(err, "Failed to get label selector to update CR")
+	}
+	replicaSelector := v1alpha1.ClusterReplicaSelector(selector.String())
+
+	if err := k8sutil.UpdateCRStatus(r.Client, r.NifiCluster, replicas, log); err != nil {
+		return err
+	}
+	if err := k8sutil.UpdateCRStatus(r.Client, r.NifiCluster, replicaSelector, log); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Inspects the current number of deployed pods and determines whether we need to scale up or down
+func (r *Reconciler) reconcileAutoscale(log logr.Logger) error {
+	podList := &corev1.PodList{}
+	matchingLabels := client.MatchingLabels(nifiutil.LabelsForNifiReplicas(r.NifiCluster.Name))
+
+	err := r.Client.List(context.TODO(), podList,
+		client.ListOption(client.InNamespace(r.NifiCluster.Namespace)), client.ListOption(matchingLabels))
+	if err != nil {
+		return errors.WrapIf(err, "failed to reconcile resource")
+	}
+
+	currentNumReplicas := int32(podList.Size())
+	desiredNumReplicas := r.NifiCluster.Spec.AutoScalingConfig.Replicas
+
+	nodeIds := generateNodeIdsFromPodSliceAsInts(podList.Items)
+	highestNodeId := nodeIds[len(nodeIds)-1]
+
+	// if the replica config is greater than current deployment, we need to scale up
+	if desiredNumReplicas > currentNumReplicas {
+		numReplicasToCreate := desiredNumReplicas - currentNumReplicas
+		newNodeId := highestNodeId + 1
+		//TODO consider upscale strategy
+		upscaleStrategy := r.NifiCluster.Spec.AutoScalingConfig.UpscaleStrategy
+
+		replicasCreated := 0
+		for i := 0; i < int(numReplicasToCreate); i++ {
+			isReady, err := r.createReplicaPod(int32(newNodeId), log)
+			if err != nil {
+				return err
+			}
+			
+			if isReady {
+				replicasCreated++
+				replicas := v1alpha1.ClusterReplicas(currentNumReplicas + int32(replicasCreated))
+				selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+					MatchLabels: matchingLabels,
+				})
+				if err != nil {
+					return errors.WrapIf(err, "Failed to get label selector to update CR")
+				}
+				replicaSelector := v1alpha1.ClusterReplicaSelector(selector.String())
+
+				if err := k8sutil.UpdateCRStatus(r.Client, r.NifiCluster, replicas, log); err != nil {
+					return err
+				}
+				if err := k8sutil.UpdateCRStatus(r.Client, r.NifiCluster, replicaSelector, log); err != nil {
+					return err
+				}
+			} else {
+				return errors.New("New ")
+			}
+			newNodeId++
+		}
+
+		// if the replica config is less than the current deployment, we need to scale down
+	} else if desiredNumReplicas < currentNumReplicas {
+		numReplicasToRemove := currentNumReplicas - desiredNumReplicas
+
+		// TODO consider downscale strategy
+		downscaleStrategy := r.NifiCluster.Spec.AutoScalingConfig.DownscaleStrategy
+	}
+
+	// otherwise, current replicas are the same as the CR so there's nothing to do
+	return nil
+}
+
+func (r *Reconciler) createReplicaPod(nodeId int32, log logr.Logger) (bool, error) {
+	// We need to grab names for servers and client in case user is enabling ACLs
+	// That way we can continue to manage dataflows and users
+	serverPass, clientPass, superUsers, err := r.getServerAndClientDetails(nodeId)
+	if err != nil {
+		return false, err
+	}
+
+	nodeConfig, err := util.GetAutoScalingNodeConfig(r.NifiCluster.Spec)
+	if err != nil {
+		return false, errors.WrapIf(err, "failed to reconcile resource")
+	}
+	for _, storage := range nodeConfig.StorageConfigs {
+		o := r.pvc(nodeId, storage, log)
+		err := r.reconcileNifiPVC(log, o.(*corev1.PersistentVolumeClaim))
+		if err != nil {
+			return false, errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+		}
+	}
+
+	o := r.secretConfig(nodeId, nodeConfig, serverPass, clientPass, superUsers, log)
+	err = k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
+	if err != nil {
+		return false, errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+	}
+
+	pvcs, err := getCreatedPVCForNode(r.Client, nodeId, r.NifiCluster.Namespace, r.NifiCluster.Name)
+	if err != nil {
+		return false, errors.WrapIfWithDetails(err, "failed to list PVC's")
+	}
+
+	if !r.NifiCluster.Spec.Service.HeadlessEnabled {
+		o := r.service(nodeId, log)
+		err := k8sutil.Reconcile(log, r.Client, o, r.NifiCluster)
+		if err != nil {
+			return false, errors.WrapIfWithDetails(err, "failed to reconcile resource", "resource", o.GetObjectKind().GroupVersionKind())
+		}
+	}
+	o = r.pod(nodeId, true, nodeConfig, pvcs, log)
+	err, isReady := r.reconcileNifiPod(log, o.(*corev1.Pod))
+	if err != nil {
+		return false, err
+	}
+	if nodeState, ok := r.NifiCluster.Status.NodesState[o.(*corev1.Pod).Labels["nodeId"]]; ok &&
+		nodeState.PodIsReady != isReady {
+		if err = k8sutil.UpdateNodeStatus(r.Client, []string{o.(*corev1.Pod).Labels["nodeId"]}, r.NifiCluster, isReady, log); err != nil {
+			return false, errors.WrapIfWithDetails(err, "could not update status for node(s)",
+				"id(s)", o.(*corev1.Pod).Labels["nodeId"])
+		}
+	}
+
+	return isReady, nil
 }
 
 func (r *Reconciler) reconcileNifiPodDelete(log logr.Logger) error {
@@ -440,6 +606,20 @@ func generateNodeIdsFromPodSlice(pods []corev1.Pod) []string {
 	for i, node := range pods {
 		ids[i] = node.Labels["nodeId"]
 	}
+	return ids
+}
+
+// return all nodeIds as ints instead of strings
+func generateNodeIdsFromPodSliceAsInts(pods []corev1.Pod) []int {
+	ids := make([]int, len(pods))
+	for i, node := range pods {
+		intNodeId, err := strconv.Atoi(node.Labels["nodeId"])
+		if err != nil {
+			errors.WrapIf(err, "Failed to convert nodeId " + node.Labels["nodeId"] + " to int32. Ignoring node.")
+		}
+		ids[i] = intNodeId
+	}
+	sort.Ints(ids)
 	return ids
 }
 

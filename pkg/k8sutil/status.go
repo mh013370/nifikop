@@ -184,6 +184,10 @@ func UpdateCRStatus(c client.Client, cluster *v1alpha1.NifiCluster, state interf
 	switch s := state.(type) {
 	case v1alpha1.ClusterState:
 		cluster.Status.State = s
+	case v1alpha1.ClusterReplicaSelector:
+		cluster.Status.Selector = s
+	case v1alpha1.ClusterReplicas:
+		cluster.Status.Replicas = s
 	}
 
 	err := c.Status().Update(context.Background(), cluster)
@@ -204,6 +208,10 @@ func UpdateCRStatus(c client.Client, cluster *v1alpha1.NifiCluster, state interf
 		switch s := state.(type) {
 		case v1alpha1.ClusterState:
 			cluster.Status.State = s
+		case v1alpha1.ClusterReplicaSelector:
+			cluster.Status.Selector = s
+		case v1alpha1.ClusterReplicas:
+			cluster.Status.Replicas = s
 		}
 
 		err = updateClusterStatus(c, cluster)

@@ -144,11 +144,16 @@ func ClusterDNSNames(cluster *v1alpha1.NifiCluster, nodeId int32) (names []strin
 		// Pod name only
 		if cluster.Spec.Service.HeadlessEnabled {
 			names = append(names,
-				nifi.ComputeNodeName(nodeId, cluster.Name))
+				nifi.ComputeNodeName(nodeId, cluster.Name, false))
 		} else {
 			names = append(names, nifi.ComputeHostListenerNodeHostname(
 				nodeId, cluster.Name, cluster.Namespace, cluster.Spec.ListenersConfig.GetClusterDomain(),
 				cluster.Spec.ListenersConfig.UseExternalDNS, cluster.Spec.Service.GetServiceTemplate()))
+		}
+
+		if cluster.Spec.AutoScalingConfig.Enabled {
+			names = append(names,
+				nifi.ComputeNodeName(nodeId, cluster.Name, true))
 		}
 	}
 	return

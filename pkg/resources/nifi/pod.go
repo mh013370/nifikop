@@ -40,7 +40,7 @@ const (
 	ContainerName string = "nifi"
 )
 
-func (r *Reconciler) pod(id int32, nodeConfig *v1alpha1.NodeConfig, pvcs []corev1.PersistentVolumeClaim, log logr.Logger) runtimeClient.Object {
+func (r *Reconciler) pod(id int32, isReplica bool, nodeConfig *v1alpha1.NodeConfig, pvcs []corev1.PersistentVolumeClaim, log logr.Logger) runtimeClient.Object {
 
 	zkAddress := r.NifiCluster.Spec.ZKAddress
 	zkHostname := zk.GetHostnameAddress(zkAddress)
@@ -121,6 +121,7 @@ func (r *Reconciler) pod(id int32, nodeConfig *v1alpha1.NodeConfig, pvcs []corev
 		nodeConfig.GetPodLabels(),
 		nifiutil.LabelsForNifi(r.NifiCluster.Name),
 		{"nodeId": fmt.Sprintf("%d", id)},
+		{"clusterReplica": fmt.Sprintf("%t", isReplica)},
 	}
 
 	if r.NifiCluster.Spec.GetMetricPort() != nil {
@@ -133,7 +134,7 @@ func (r *Reconciler) pod(id int32, nodeConfig *v1alpha1.NodeConfig, pvcs []corev
 	pod := &corev1.Pod{
 		//ObjectMeta: templates.ObjectMetaWithAnnotations(
 		ObjectMeta: templates.ObjectMetaWithGeneratedNameAndAnnotations(
-			nifiutil.ComputeNodeName(id, r.NifiCluster.Name),
+			nifiutil.ComputeNodeName(id, r.NifiCluster.Name, isReplica),
 			util.MergeLabels(labelsToMerge...),
 			util.MergeAnnotations(anntotationsToMerge...), r.NifiCluster,
 		),
@@ -177,7 +178,7 @@ done`,
 	}
 
 	//if r.NifiCluster.Spec.Service.HeadlessEnabled {
-	pod.Spec.Hostname = nifiutil.ComputeNodeName(id, r.NifiCluster.Name)
+	pod.Spec.Hostname = nifiutil.ComputeNodeName(id, r.NifiCluster.Name, isReplica)
 	pod.Spec.Subdomain = nifiutil.ComputeRequestNiFiAllNodeService(r.NifiCluster.Name,
 		r.NifiCluster.Spec.Service.GetServiceTemplate())
 	//}
