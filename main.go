@@ -8,8 +8,11 @@ import (
 
 	"github.com/go-logr/zapr"
 	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
-	"github.com/konpyutaika/nifikop/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+
+	"github.com/konpyutaika/nifikop/pkg/common"
+	"github.com/konpyutaika/nifikop/pkg/util"
+	"github.com/konpyutaika/nifikop/version"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -23,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/konpyutaika/nifikop/api/v1alpha1"
+	nifiv1alpha1 "github.com/konpyutaika/nifikop/api/v1alpha1"
 	"github.com/konpyutaika/nifikop/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -35,6 +39,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(nifiv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -181,6 +186,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controllers.NifiReplicaClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NifiReplicaCluster")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {

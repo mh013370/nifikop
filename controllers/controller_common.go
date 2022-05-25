@@ -18,6 +18,7 @@ import (
 // to a NifiCluster
 
 var ClusterRefLabel = "nifiCluster"
+var ReplicaClusterRefLabel = "nifiReplicaCluster"
 
 // requeueWithError is a convenience wrapper around logging an error message
 // separate from the stacktrace and then passing the error through to the controller
@@ -43,7 +44,16 @@ func Reconciled() (reconcile.Result, error) {
 
 // clusterLabelString returns the label value for a cluster reference
 func ClusterLabelString(cluster *v1alpha1.NifiCluster) string {
-	return fmt.Sprintf("%s.%s", cluster.Name, cluster.Namespace)
+	return clusterLabelString(cluster.Name, cluster.Namespace)
+}
+
+// clusterReplicaLabelString returns the label value for a cluster reference
+func ReplicaClusterLabelString(cluster *v1alpha1.NifiReplicaCluster) string {
+	return clusterLabelString(cluster.Name, cluster.Namespace)
+}
+
+func clusterLabelString(name string, namespace string) string {
+	return fmt.Sprintf("%s.%s", name, namespace)
 }
 
 // checkNodeConnectionError is a convenience wrapper for returning from common

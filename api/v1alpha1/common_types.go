@@ -2,6 +2,8 @@ package v1alpha1
 
 import (
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DataflowState defines the state of a NifiDataflow
@@ -325,6 +327,66 @@ type NodeState struct {
 	InitClusterNode InitClusterNode `json:"initClusterNode"`
 	// PodIsReady whether or not the associated pod is ready
 	PodIsReady bool `json:"podIsReady"`
+}
+
+type Cluster struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+}
+
+// Cluster is everything shared between NifiCluster and NifiReplicaCluster
+type ClusterSpec struct {
+	// Service defines the policy for services owned by NiFiKop operator.
+	Service ServicePolicy `json:"service,omitempty"`
+	// Pod defines the policy for pods owned by NiFiKop operator.
+	Pod PodPolicy `json:"pod,omitempty"`
+	// zKAddress specifies the ZooKeeper connection string
+	// in the form hostname:port where host and port are those of a Zookeeper server.
+	// TODO: rework for nice zookeeper connect string =
+	ZKAddress string `json:"zkAddress,omitempty"`
+	// zKPath specifies the Zookeeper chroot path as part
+	// of its Zookeeper connection string which puts its data under same path in the global ZooKeeper namespace.
+	ZKPath string `json:"zkPath,omitempty"`
+	// initContainerImage can override the default image used into the init container to check if
+	// ZoooKeeper server is reachable.
+	InitContainerImage string `json:"initContainerImage,omitempty"`
+	// initContainers defines additional initContainers configurations
+	InitContainers []corev1.Container `json:"initContainers,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,2,rep,name=containers"`
+	// clusterImage can specify the whole NiFi cluster image in one place
+	ClusterImage string `json:"clusterImage,omitempty"`
+	// oneNifiNodePerNode if set to true every nifi node is started on a new node, if there is not enough node to do that
+	// it will stay in pending state. If set to false the operator also tries to schedule the nifi node to a unique node
+	// but if the node number is insufficient the nifi node will be scheduled to a node where a nifi node is already running.
+	OneNifiNodePerNode bool `json:"oneNifiNodePerNode,omitempty"`
+	// propagate labels to all resources created in this deployment
+	PropagateLabels bool `json:"propagateLabels,omitempty"`
+	// managedAdminUsers contains the list of users that will be added to the managed admin group (with all rights)
+	ManagedAdminUsers []ManagedUser `json:"managedAdminUsers,omitempty"`
+	// managedReaderUsers contains the list of users that will be added to the managed reader group (with all view rights)
+	ManagedReaderUsers []ManagedUser `json:"managedReaderUsers,omitempty"`
+	// readOnlyConfig specifies the read-only type Nifi config cluster wide, all theses
+	// will be merged with node specified readOnly configurations, so it can be overwritten per node.
+	ReadOnlyConfig ReadOnlyConfig `json:"readOnlyConfig,omitempty"`
+	// NodeUserIdentityTemplate specifies the template to be used when naming the node user identity (e.g. node-%d-mysuffix)
+	NodeUserIdentityTemplate *string `json:"nodeUserIdentityTemplate,omitempty"`
+	// LdapConfiguration specifies the configuration if you want to use LDAP
+	LdapConfiguration LdapConfiguration `json:"ldapConfiguration,omitempty"`
+	// NifiClusterTaskSpec specifies the configuration of the nifi cluster Tasks
+	NifiClusterTaskSpec NifiClusterTaskSpec `json:"nifiClusterTaskSpec,omitempty"`
+	// listenerConfig specifies nifi's listener specifig configs
+	ListenersConfig *ListenersConfig `json:"listenersConfig,omitempty"`
+	// SidecarsConfig defines additional sidecar configurations
+	SidecarConfigs []corev1.Container `json:"sidecarConfigs,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,2,rep,name=containers"`
+	// ExternalService specifies settings required to access nifi externally
+	ExternalServices []ExternalServiceConfig `json:"externalServices,omitempty"`
+	// TopologySpreadConstraints specifies any TopologySpreadConstraint objects to be applied to all nodes
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+	// NifiControllerTemplate specifies the template to be used when naming the node controller (e.g. %s-mysuffix)
+	// Warning: once defined don't change this value either the operator will no longer be able to manage the cluster
+	NifiControllerTemplate *string `json:"nifiControllerTemplate,omitempty"`
+	// ControllerUserIdentity specifies what to call the static admin user's identity
+	// Warning: once defined don't change this value either the operator will no longer be able to manage the cluster
+	ControllerUserIdentity *string `json:"controllerUserIdentity,omitempty"`
 }
 
 // RackAwarenessState holds info about rack awareness status
