@@ -11,8 +11,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"github.com/konpyutaika/nifikop/pkg/common"
-	"github.com/konpyutaika/nifikop/pkg/util"
-	"github.com/konpyutaika/nifikop/version"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -190,7 +188,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NifiReplicaCluster")
+		logger.Error("unable to create controller", zap.String("controller", "NifiReplicaCluster"), zap.Error(err))
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
