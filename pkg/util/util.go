@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/konpyutaika/nifikop/api/v1alpha1"
+	"github.com/konpyutaika/nifikop/pkg/constraints"
 
 	"emperror.dev/errors"
 	"github.com/imdario/mergo"
@@ -257,4 +258,25 @@ func GetRequeueInterval(interval int, offset int) time.Duration {
 	duration := interval + rand.Intn(offset+1) - (offset / 2)
 	duration = Max(duration, rand.Intn(5)+1) // make sure duration does not go zero for very large offsets
 	return time.Duration(duration) * time.Second
+}
+
+func GetClusterSpec[CSpec constraints.ClusterSpec[C], C constraints.Cluster](cluster C) (CSpec, error) {
+	var ret CSpec
+	switch c := any(cluster).(type) {
+	case *v1alpha1.NifiCluster:
+		switch p := any(&ret).(type) {
+		case *v1alpha1.NifiClusterSpec: 
+			*p = c.Spec
+		default:
+			return ret, errors.New(fmt.Sprintf("Invalid type combination. type: %T", p))
+		}
+	case *v1alpha1.NifiReplicaCluster:
+		switch p := any(&ret).(type) {
+			case *v1alpha1.NifiReplicaClusterSpec: 
+				*p = c.Spec
+			default:
+				return ret, errors.New(fmt.Sprintf("Invalid type combination. type: %T", p))
+			}
+	}
+	return ret, nil
 }

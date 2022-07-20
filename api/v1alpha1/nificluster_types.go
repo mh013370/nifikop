@@ -23,8 +23,9 @@ const (
 
 // NifiClusterSpec defines the desired state of NifiCluster
 type NifiClusterSpec struct {
+	ClusterSpec
 	// ClusterSpec embedded interace that contains everything shared between NifiCluster and NifiReplicaCluster
-	ClusterSpec `json:",inline"`
+	CommonClusterSpec `json:",inline"`
 	// clientType defines if the operator will use basic or tls authentication to query the NiFi cluster.
 	// +kubebuilder:validation:Enum={"tls","basic"}
 	ClientType ClientConfigType `json:"clientType,omitempty"`
@@ -451,10 +452,8 @@ type NifiClusterTaskSpec struct {
 
 // NifiClusterStatus defines the observed state of NifiCluster
 type NifiClusterStatus struct {
-	// Store the state of each nifi node
-	NodesState map[string]NodeState `json:"nodesState,omitempty"`
-	// ClusterState holds info about the cluster state
-	State ClusterState `json:"state"`
+	ClusterStatus
+	CommonClusterStatus `json:",inline"`
 	// RollingUpgradeStatus defines status of rolling upgrade
 	RollingUpgrade RollingUpgradeStatus `json:"rollingUpgradeStatus,omitempty"`
 	// RootProcessGroupId contains the uuid of the root process group for this cluster
@@ -475,11 +474,33 @@ type PrometheusReportingTaskStatus struct {
 
 // NifiCluster is the Schema for the nificlusters API
 type NifiCluster struct {
+	Cluster
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   NifiClusterSpec   `json:"spec,omitempty"`
 	Status NifiClusterStatus `json:"status,omitempty"`
+}
+func (n *NifiCluster) GetTypeMeta() metav1.TypeMeta {
+	return n.TypeMeta
+}
+func (n *NifiCluster) GetObjectMeta() metav1.ObjectMeta {
+	return n.ObjectMeta
+}
+func (n *NifiCluster) GetName() string {
+	return n.Name
+}
+func (n *NifiCluster) GetNamespace() string {
+	return n.Namespace
+}
+func (n *NifiCluster) GetSpec() ClusterSpec {
+	return n.Spec
+}
+func (n *NifiCluster) GetCommonSpec() CommonClusterSpec {
+	return n.Spec.CommonClusterSpec
+}
+func (n *NifiCluster) GetStatus() ClusterStatus {
+	return n.Status
 }
 
 // +kubebuilder:object:root=true

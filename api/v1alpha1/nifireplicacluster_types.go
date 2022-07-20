@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,8 +25,9 @@ import (
 
 // NifiReplicaClusterSpec defines the desired state of NifiReplicaCluster
 type NifiReplicaClusterSpec struct {
+	ClusterSpec
 	// ClusterSpec embedded interace that contains everything shared between NifiCluster and NifiReplicaCluster
-	ClusterSpec `json:",inline"`
+	CommonClusterSpec `json:",inline"`
 	// Replicas is the number of replicas this cluster currently has
 	// +kubebuilder:default:=1
 	// +optional
@@ -40,12 +40,10 @@ type NifiReplicaClusterSpec struct {
 
 // NifiReplicaClusterStatus defines the observed state of NifiReplicaCluster
 type NifiReplicaClusterStatus struct {
-	// ClusterState holds info about the cluster state
-	State ClusterState `json:"state"`
+	ClusterStatus
+	CommonClusterStatus `json:",inline"`
 	// the time that this cluster was created
 	CreationTime metav1.Time `json:"creationTime,omitempty"`
-	// Store the state of each nifi node
-	NodesState map[string]ReplicaNodeState `json:"nodesState,omitempty"`
 }
 
 // NifiState holds information about nifi state
@@ -69,11 +67,33 @@ type ApplicationPolicy struct {
 
 // NifiReplicaCluster is the Schema for the nifireplicaclusters API
 type NifiReplicaCluster struct {
+	Cluster
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   NifiReplicaClusterSpec   `json:"spec,omitempty"`
 	Status NifiReplicaClusterStatus `json:"status,omitempty"`
+}
+func (n *NifiReplicaCluster) GetTypeMeta() metav1.TypeMeta {
+	return n.TypeMeta
+}
+func (n *NifiReplicaCluster) GetObjectMeta() metav1.ObjectMeta {
+	return n.ObjectMeta
+}
+func (n *NifiReplicaCluster) GetName() string {
+	return n.Name
+}
+func (n *NifiReplicaCluster) GetNamespace() string {
+	return n.Namespace
+}
+func (n *NifiReplicaCluster) GetSpec() ClusterSpec {
+	return n.Spec
+}
+func (n *NifiReplicaCluster) GetCommonSpec() CommonClusterSpec {
+	return n.Spec.CommonClusterSpec
+}
+func (n *NifiReplicaCluster) GetStatus() ClusterStatus {
+	return n.Status
 }
 
 //+kubebuilder:object:root=true

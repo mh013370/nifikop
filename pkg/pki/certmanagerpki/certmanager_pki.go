@@ -24,24 +24,24 @@ func (c *certManager) FinalizePKI(ctx context.Context, logger zap.Logger) error 
 	logger.Info("Removing cert-manager certificates and secrets")
 
 	// Safety check that we are actually doing something
-	if c.cluster.Spec.ListenersConfig.SSLSecrets == nil {
+	if c.cluster.GetCommonSpec().ListenersConfig.SSLSecrets == nil {
 		return nil
 	}
 
-	if c.cluster.Spec.ListenersConfig.SSLSecrets.Create {
+	if c.cluster.GetCommonSpec().ListenersConfig.SSLSecrets.Create {
 		// Names of our certificates and secrets
 		objNames := []types.NamespacedName{
-			{Name: c.cluster.GetNifiControllerUserIdentity(), Namespace: c.cluster.Namespace},
+			{Name: *c.cluster.GetCommonSpec().ControllerUserIdentity, Namespace: c.cluster.GetNamespace()},
 		}
 
 		for _, node := range c.cluster.Spec.Nodes {
-			objNames = append(objNames, types.NamespacedName{Name: fmt.Sprintf(pkicommon.NodeServerCertTemplate, c.cluster.Name, node.Id), Namespace: c.cluster.Namespace})
+			objNames = append(objNames, types.NamespacedName{Name: fmt.Sprintf(pkicommon.NodeServerCertTemplate, c.cluster.GetName(), node.Id), Namespace: c.cluster.GetNamespace()})
 		}
 
-		if c.cluster.Spec.ListenersConfig.SSLSecrets.IssuerRef == nil {
+		if c.cluster.GetCommonSpec().ListenersConfig.SSLSecrets.IssuerRef == nil {
 			objNames = append(
 				objNames,
-				types.NamespacedName{Name: fmt.Sprintf(pkicommon.NodeCACertTemplate, c.cluster.Name), Namespace: c.cluster.Namespace})
+				types.NamespacedName{Name: fmt.Sprintf(pkicommon.NodeCACertTemplate, c.cluster.GetName()), Namespace: c.cluster.GetNamespace()})
 
 		}
 		for _, obj := range objNames {

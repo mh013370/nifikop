@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -329,13 +330,31 @@ type NodeState struct {
 	PodIsReady bool `json:"podIsReady"`
 }
 
-type Cluster struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+// +kubebuilder:object:generate=false
+type Cluster interface {
+	GetTypeMeta() metav1.TypeMeta
+	GetObjectMeta() metav1.ObjectMeta
+	GetName() string
+	GetNamespace() string
+	GetSpec() ClusterSpec
+	GetCommonSpec() CommonClusterSpec
+	GetStatus() ClusterStatus
+}
+// +kubebuilder:object:generate=false
+type ClusterSpec interface {}
+// +kubebuilder:object:generate=false
+type ClusterStatus interface {}
+
+// CommonClusterStatus is status shared by all nifi cluster variants
+type CommonClusterStatus struct {
+	// ClusterState holds info about the cluster state
+	State ClusterState `json:"state"`
+	// Store the state of each nifi node
+	NodesState map[string]NodeState `json:"nodesState,omitempty"`
 }
 
-// Cluster is everything shared between NifiCluster and NifiReplicaCluster
-type ClusterSpec struct {
+// CommonClusterSpec is everything shared between NifiCluster and NifiReplicaCluster
+type CommonClusterSpec struct {
 	// Service defines the policy for services owned by NiFiKop operator.
 	Service ServicePolicy `json:"service,omitempty"`
 	// Pod defines the policy for pods owned by NiFiKop operator.

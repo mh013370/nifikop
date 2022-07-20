@@ -13,9 +13,9 @@ type CertManager interface {
 // certManager implements a PKIManager using cert-manager as the backend
 type certManager struct {
 	client  client.Client
-	cluster *v1alpha1.ClusterSpec
+	cluster v1alpha1.Cluster
 }
 
-func New(client client.Client, cluster *v1alpha1.ClusterSpec) CertManager {
+func New(client client.Client, cluster v1alpha1.Cluster) CertManager {
 	return &certManager{client: client, cluster: cluster}
 }

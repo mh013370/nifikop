@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/konpyutaika/nifikop/api/v1alpha1"
+	"github.com/konpyutaika/nifikop/pkg/constraints"
 )
 
 func TestMergeHostAliasesOverride(t *testing.T) {
@@ -72,4 +75,15 @@ func TestMergeHostAliasesEmpty(t *testing.T) {
 	if len(results) != 0 {
 		t.Errorf("The merge results are not the correct length: %v+", results)
 	}
+}
+
+func Testx(t *testing.T) {
+	cluster := &v1alpha1.NifiCluster{
+		Spec: v1alpha1.NifiClusterSpec{
+			Type: v1alpha1.ExternalCluster,
+		},
+	}
+
+	var spec v1alpha1.NifiClusterSpec
+	spec, err := GetClusterSpec(cluster)
 }

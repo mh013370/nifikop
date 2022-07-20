@@ -28,6 +28,7 @@ import (
 	"github.com/konpyutaika/nifikop/pkg/resources"
 	"github.com/konpyutaika/nifikop/pkg/resources/nifi"
 	"github.com/konpyutaika/nifikop/pkg/util"
+	"github.com/konpyutaika/nifikop/pkg/types"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -91,6 +92,10 @@ func (r *NifiClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 		// Error reading the object - requeue the request.
 		return RequeueWithError(r.Log, err.Error(), err)
+	}
+	
+	wrapped := &types.ClusterWrapper[*v1alpha1.NifiCluster] {
+		Cluster: instance,
 	}
 
 	// Check if marked for deletion and run finalizers
