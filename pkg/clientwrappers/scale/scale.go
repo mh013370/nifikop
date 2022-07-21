@@ -158,7 +158,7 @@ func CheckIfNCActionStepFinished(actionStep v1alpha1.ActionStep, config *clientc
 		return false, nil
 	}
 
-	nodeStatus := nodeEntity.Node.Status
+	nodeStatus := nodeEntity.Entity.Node.Status
 	switch actionStep {
 
 	case v1alpha1.DisconnectNodeAction:
@@ -199,7 +199,7 @@ func EnsureRemovedNodes(config *clientconfig.NifiConfig, cluster *v1alpha1.NifiC
 	for _, nodeId := range generateNodeStateIdSlice(cluster.Status.NodesState) {
 		stateAdresses[nifiutil.GenerateHostListenerNodeAddressFromCluster(nodeId, cluster)] = nodeId
 	}
-	for _, nodeDto := range clusterEntity.Cluster.Nodes {
+	for _, nodeDto := range clusterEntity.Entity.Cluster.Nodes {
 
 		if _, ok := stateAdresses[fmt.Sprintf("%s:%d", nodeDto.Address, nodeDto.ApiPort)]; !ok {
 

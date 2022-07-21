@@ -103,16 +103,23 @@ func (r *NifiClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if instance.IsExternal() {
 		return RequeueAfter(time.Duration(15) * time.Second)
 	}
-	//
-	if len(instance.Status.State) == 0 || instance.Status.State == v1alpha1.NifiClusterInitializing {
+
+	// every standalone node is considered an init node since they each need to be initialized independently.
+	if instance.IsStandalone() {
+		if result, err := r.setInitNodes(ctx, instance); err != nil {
+			return result, err
+		}
+
+		// If not a standalone cluster, then initialize the cluster.
+	} else if len(instance.Status.State) == 0 || instance.Status.State == v1alpha1.NifiClusterInitializing {
 		if err := k8sutil.UpdateCRStatus(r.Client, instance, v1alpha1.NifiClusterInitializing, r.Log); err != nil {
 			return RequeueWithError(r.Log, err.Error(), err)
 		}
-		for nId := range instance.Spec.Nodes {
-			if err := k8sutil.UpdateNodeStatus(r.Client, []string{fmt.Sprint(instance.Spec.Nodes[nId].Id)}, instance, v1alpha1.IsInitClusterNode, r.Log); err != nil {
-				return RequeueWithError(r.Log, err.Error(), err)
-			}
+
+		if result, err := r.setInitNodes(ctx, instance); err != nil {
+			return result, err
 		}
+
 		if err := k8sutil.UpdateCRStatus(r.Client, instance, v1alpha1.NifiClusterInitialized, r.Log); err != nil {
 			return RequeueWithError(r.Log, err.Error(), err)
 		}
@@ -209,6 +216,18 @@ func (r *NifiClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func (r *NifiClusterReconciler) setInitNodes(ctx context.Context, cluster *v1alpha1.NifiCluster) (reconcile.Result, error) {
+	for nId := range cluster.Spec.Nodes {
+		// only update the node status for those which aren't already init cluster nodes.
+		if val, ok := cluster.Status.NodesState[fmt.Sprint(nId)]; !ok || !val.IsInitClusterNode() {
+			if err := k8sutil.UpdateNodeStatus(r.Client, []string{fmt.Sprint(cluster.Spec.Nodes[nId].Id)}, cluster, v1alpha1.IsInitClusterNode, r.Log); err != nil {
+				return RequeueWithError(r.Log, err.Error(), err)
+			}
+		}
+	}
+	return Reconciled()
+}
+
 func (r *NifiClusterReconciler) checkFinalizers(ctx context.Context,
 	cluster *v1alpha1.NifiCluster) (reconcile.Result, error) {
 
@@ -237,7 +256,7 @@ func (r *NifiClusterReconciler) checkFinalizers(ctx context.Context,
 		namespaces = r.Namespaces
 	}
 
-	if cluster.IsInternal() && cluster.Spec.ListenersConfig.SSLSecrets != nil {
+	if (cluster.IsInternal() || cluster.IsStandalone()) && cluster.Spec.ListenersConfig.SSLSecrets != nil {
 		// If we haven't deleted all nifiusers yet, iterate namespaces and delete all nifiusers
 		// with the matching label.
 		if util.StringSliceContains(cluster.GetFinalizers(), clusterUsersFinalizer) {
@@ -258,7 +277,7 @@ func (r *NifiClusterReconciler) checkFinalizers(ctx context.Context,
 				}
 			}
 			if cluster, err = r.removeFinalizer(ctx, cluster, clusterUsersFinalizer); err != nil {
-				return RequeueWithError(r.Log, "failed to remove users finalizer from nificluster "+cluster.Name, err)
+				return RequeueWithError(r.Log, "failed to remove users finalizer from nificluster", err)
 			}
 		}
 
@@ -289,7 +308,7 @@ func (r *NifiClusterReconciler) checkFinalizers(ctx context.Context,
 			// the state of the finalizer not yet reflected in the response we got.
 			return Reconciled()
 		}
-		return RequeueWithError(r.Log, "failed to remove main finalizer from NifiCluser "+cluster.Name, err)
+		return RequeueWithError(r.Log, "failed to remove main finalizer from NifiCluser", err)
 	}
 
 	return Reconciled()
@@ -318,7 +337,7 @@ func (r *NifiClusterReconciler) ensureFinalizers(ctx context.Context,
 	cluster *v1alpha1.NifiCluster) (updated *v1alpha1.NifiCluster, err error) {
 
 	finalizers := []string{clusterFinalizer}
-	if cluster.IsInternal() && cluster.Spec.ListenersConfig.SSLSecrets != nil {
+	if (cluster.IsInternal() || cluster.IsStandalone()) && cluster.Spec.ListenersConfig.SSLSecrets != nil {
 		finalizers = append(finalizers, clusterUsersFinalizer)
 	}
 	for _, finalizer := range finalizers {

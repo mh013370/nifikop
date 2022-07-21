@@ -25,8 +25,15 @@ func (n *tls) BuildConnect() (cluster clientconfig.ClusterConnect, err error) {
 		return
 	}
 
-	if !c.IsExternal() {
+	if c.IsInternal() {
 		cluster = &nificluster.InternalCluster{
+			Name:      c.Name,
+			Namespace: c.Namespace,
+			Status:    c.Status,
+		}
+		return
+	} else if c.IsStandalone() {
+		cluster = &nificluster.StandaloneCluster{
 			Name:      c.Name,
 			Namespace: c.Namespace,
 			Status:    c.Status,

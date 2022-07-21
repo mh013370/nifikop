@@ -28,7 +28,7 @@ func TestCreateSnippet(t *testing.T) {
 	assert.Nil(snippetEntity)
 }
 
-func testCreateSnippet(t *testing.T, entity nigoapi.SnippetEntity, status int) (*nigoapi.SnippetEntity, error) {
+func testCreateSnippet(t *testing.T, entity nigoapi.SnippetEntity, status int) ([]*ClientEntityPair[nigoapi.SnippetEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -69,7 +69,7 @@ func TestUpdateSnippet(t *testing.T) {
 	assert.Nil(snippetEntity)
 }
 
-func testUpdateSnippet(t *testing.T, entity nigoapi.SnippetEntity, status int) (*nigoapi.SnippetEntity, error) {
+func testUpdateSnippet(t *testing.T, entity nigoapi.SnippetEntity, status int) ([]*ClientEntityPair[nigoapi.SnippetEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -97,7 +97,7 @@ func MockSnippet(pgID, parentGroupID string) nigoapi.SnippetEntity {
 	return nigoapi.SnippetEntity{
 		Snippet: &nigoapi.SnippetDto{
 			ParentGroupId: parentGroupID,
-			ProcessGroups: map[string]nigoapi.RevisionDto{pgID: nigoapi.RevisionDto{}},
+			ProcessGroups: map[string]nigoapi.RevisionDto{pgID: {}},
 		},
 	}
 }

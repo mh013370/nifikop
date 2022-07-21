@@ -30,6 +30,8 @@ type NifiUserSpec struct {
 type NifiUserStatus struct {
 	// The nifi user's node id
 	Id string `json:"id"`
+	// The seed used to generate the user's id
+	IdSeed string `json:"idSeed,omitempty"`
 	// The last nifi  user's node revision version catched
 	Version int64 `json:"version"`
 }

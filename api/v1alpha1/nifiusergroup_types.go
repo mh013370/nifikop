@@ -22,6 +22,8 @@ type NifiUserGroupSpec struct {
 type NifiUserGroupStatus struct {
 	// The nifi usergroup's node id
 	Id string `json:"id"`
+	// The ID used to generate the usergroup's id
+	IdSeed string `json:"idSeed,omitempty"`
 	// The last nifi usergroup's node revision version catched
 	Version int64 `json:"version"`
 }

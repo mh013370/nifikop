@@ -38,6 +38,8 @@ type Parameter struct {
 type NifiParameterContextStatus struct {
 	// the nifi parameter context id.
 	Id string `json:"id"`
+	// the seed used to generate the parameter context id.
+	IdSeed string `json:"idSeed,omitempty"`
 	// the last nifi parameter context revision version catched.
 	Version int64 `json:"version"`
 	// the latest update request.

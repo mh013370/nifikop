@@ -59,6 +59,9 @@ type NifiConnectionDropping struct{ error }
 // NifiFlowDraining states that flowfile drop is still draining
 type NifiFlowDraining struct{ error }
 
+// NifiParameterContextSyncing states that the parameter context is still syncing
+type NifiParameterContextSyncing struct{ error }
+
 // NifiParameterContextUpdateRequestRunning states that the parameter context update request is still running
 type NifiParameterContextUpdateRequestRunning struct{ error }
 
@@ -74,11 +77,23 @@ type NifiFlowSyncing struct{ error }
 // NifiFlowScheduling states that the flow is still scheduling
 type NifiFlowScheduling struct{ error }
 
+// NifiReportingTaskSyncing states that the reporting task is still syncing
+type NifiReportingTaskSyncing struct{ error }
+
 // NifiReportingTasksValidating states that the reporting task is still validating
 type NifiReportingTasksValidating struct{ error }
 
 // NifiReportingTasksInvalid states that the reporting task is invalid
 type NifiReportingTasksInvalid struct{ error }
+
+// NifiUserSyncing states that a user is still being synced on a NiFi
+type NifiUserSyncing struct{ error }
+
+// NifiUserGroupSyncing states that a user group is still being synced on a NiFi
+type NifiUserGroupSyncing struct{ error }
+
+// NifiRegistryClientSyncing states that a registry client is still being synced on a NiFi
+type NifiRegistryClientSyncing struct{ error }
 
 // New creates a new error factory error
 func New(t interface{}, err error, msg string, wrapArgs ...interface{}) error {

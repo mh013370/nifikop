@@ -63,6 +63,9 @@ spec:
               id:
                 description: The nifi registry client's id
                 type: string
+              idSeed:
+                description: the seed used to generate the registry client's ID
+                type: string
               version:
                 description: The last nifi registry client revision version catched
                 format: int64

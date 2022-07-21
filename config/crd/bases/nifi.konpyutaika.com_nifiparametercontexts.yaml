@@ -114,6 +114,9 @@ spec:
               id:
                 description: the nifi parameter context id.
                 type: string
+              idSeed:
+                description: the seed used to generate the parameter context id.
+                type: string
               latestUpdateRequest:
                 description: the latest update request.
                 properties:

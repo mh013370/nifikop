@@ -29,7 +29,7 @@ func TestDescribeCluster(t *testing.T) {
 	assert.Nil(clusterEntity)
 }
 
-func testDescribeCluster(t *testing.T, status int) (*nigoapi.ClusterEntity, error) {
+func testDescribeCluster(t *testing.T, status int) (*ClientEntityPair[nigoapi.ClusterEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -73,7 +73,7 @@ func TestGetClusterNode(t *testing.T) {
 	assert.Nil(nodeEntity)
 }
 
-func testGetClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*nigoapi.NodeEntity, error) {
+func testGetClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 
 	client, err := testClientFromCluster(cluster, false)
 	if err != nil {
@@ -118,7 +118,7 @@ func TestDisconnectClusterNode(t *testing.T) {
 	assert.Nil(nodeEntity)
 }
 
-func testDisconnectClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*nigoapi.NodeEntity, error) {
+func testDisconnectClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 
 	client, err := testClientFromCluster(cluster, false)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestConnectClusterNode(t *testing.T) {
 	assert.Nil(nodeEntity)
 }
 
-func testConnectClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*nigoapi.NodeEntity, error) {
+func testConnectClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 
 	client, err := testClientFromCluster(cluster, false)
 	if err != nil {
@@ -208,7 +208,7 @@ func TestOffloadClusterNode(t *testing.T) {
 	assert.Nil(nodeEntity)
 }
 
-func testOffloadClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*nigoapi.NodeEntity, error) {
+func testOffloadClusterNode(t *testing.T, cluster *v1alpha1.NifiCluster, nodeId int32, status int) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 
 	client, err := testClientFromCluster(cluster, false)
 	if err != nil {

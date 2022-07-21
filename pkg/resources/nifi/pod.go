@@ -51,6 +51,25 @@ func (r *Reconciler) pod(node v1alpha1.Node, nodeConfig *v1alpha1.NodeConfig, pv
 	volumeMount := []corev1.VolumeMount{}
 	initContainers := append([]corev1.Container{}, r.NifiCluster.Spec.InitContainers...)
 
+	// the zookeeper init container isn't necessary for standalone clusters since they dont use zookeeper
+	if !r.NifiCluster.IsStandalone() {
+		initContainers = append(initContainers, []corev1.Container{
+			{
+				Name:            "zookeeper",
+				Image:           r.NifiCluster.Spec.GetInitContainerImage(),
+				ImagePullPolicy: nodeConfig.GetImagePullPolicy(),
+				Command: []string{"sh", "-c", fmt.Sprintf(`
+echo trying to contact Zookeeper: %s
+until nc -vzw 1 %s %s; do
+echo "waiting for zookeeper..."
+sleep 2
+done`,
+					zkAddress, zkHostname, zkPort)},
+				Resources: generateInitContainerResources(),
+			},
+		}...)
+	}
+
 	volume = append(volume, dataVolume...)
 	volumeMount = append(volumeMount, dataVolumeMount...)
 
@@ -146,21 +165,7 @@ func (r *Reconciler) pod(node v1alpha1.Node, nodeConfig *v1alpha1.NodeConfig, pv
 				RunAsNonRoot: func(b bool) *bool { return &b }(true),
 				FSGroup:      nodeConfig.GetFSGroup(),
 			},
-			InitContainers: r.injectAdditionalEnvVars(append(initContainers, []corev1.Container{
-				{
-					Name:            "zookeeper",
-					Image:           r.NifiCluster.Spec.GetInitContainerImage(),
-					ImagePullPolicy: nodeConfig.GetImagePullPolicy(),
-					Command: []string{"sh", "-c", fmt.Sprintf(`
-echo trying to contact Zookeeper: %s
-until nc -vzw 1 %s %s; do
-	echo "waiting for zookeeper..."
-	sleep 2
-done`,
-						zkAddress, zkHostname, zkPort)},
-					Resources: generateInitContainerResources(),
-				},
-			}...)),
+			InitContainers: r.injectAdditionalEnvVars(initContainers),
 			Affinity: &corev1.Affinity{
 				PodAntiAffinity: generatePodAntiAffinity(r.NifiCluster.Name, r.NifiCluster.Spec.OneNifiNodePerNode),
 			},

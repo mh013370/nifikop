@@ -84,69 +84,74 @@ func (r *NifiClusterTaskReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	var nodesWithRunningNCTask []string
 
-	for nodeId, nodeStatus := range instance.Status.NodesState {
-		if nodeStatus.GracefulActionState.State.IsRunningState() {
-			nodesWithRunningNCTask = append(nodesWithRunningNCTask, nodeId)
+	if !instance.IsStandalone() {
+		for nodeId, nodeStatus := range instance.Status.NodesState {
+			if nodeStatus.GracefulActionState.State.IsRunningState() {
+				nodesWithRunningNCTask = append(nodesWithRunningNCTask, nodeId)
+			}
 		}
-	}
 
-	if len(nodesWithRunningNCTask) > 0 {
-		err = r.handlePodRunningTask(instance, nodesWithRunningNCTask, r.Log)
-	}
-
-	if err != nil {
-		switch errors.Cause(err).(type) {
-		case errorfactory.NifiClusterNotReady, errorfactory.ResourceNotReady:
-			return RequeueAfter(intervalNotReady)
-		case errorfactory.NifiClusterTaskRunning:
-			return RequeueAfter(intervalRunning)
-		case errorfactory.NifiClusterTaskTimeout, errorfactory.NifiClusterTaskFailure:
-			return RequeueAfter(intervalTimeout)
-		default:
-			return RequeueWithError(r.Log, err.Error(), err)
+		if len(nodesWithRunningNCTask) > 0 {
+			err = r.handlePodRunningTask(instance, nodesWithRunningNCTask, r.Log)
 		}
-	}
 
-	var nodesWithDownscaleRequired []string
-	var nodesWithUpscaleRequired []string
-
-	for nodeId, nodeStatus := range instance.Status.NodesState {
-		if nodeStatus.GracefulActionState.State == v1alpha1.GracefulUpscaleRequired {
-			nodesWithUpscaleRequired = append(nodesWithUpscaleRequired, nodeId)
-		} else if nodeStatus.GracefulActionState.State == v1alpha1.GracefulDownscaleRequired {
-			nodesWithDownscaleRequired = append(nodesWithDownscaleRequired, nodeId)
+		if err != nil {
+			switch errors.Cause(err).(type) {
+			case errorfactory.NifiClusterNotReady, errorfactory.ResourceNotReady:
+				return RequeueAfter(intervalNotReady)
+			case errorfactory.NifiClusterTaskRunning:
+				return RequeueAfter(intervalRunning)
+			case errorfactory.NifiClusterTaskTimeout, errorfactory.NifiClusterTaskFailure:
+				return RequeueAfter(intervalTimeout)
+			default:
+				return RequeueWithError(r.Log, err.Error(), err)
+			}
 		}
-	}
 
-	if len(nodesWithUpscaleRequired) > 0 {
-		err = r.handlePodAddCCTask(instance, nodesWithUpscaleRequired)
-	} else if len(nodesWithDownscaleRequired) > 0 {
-		err = r.handlePodDeleteNCTask(instance, nodesWithDownscaleRequired)
-	}
+		var nodesWithDownscaleRequired []string
+		var nodesWithUpscaleRequired []string
 
-	if err != nil {
-		switch errors.Cause(err).(type) {
-		case errorfactory.NifiClusterNotReady:
-			return RequeueAfter(intervalNotReady)
-		case errorfactory.NifiClusterTaskRunning:
-			return RequeueAfter(intervalRunning)
-		case errorfactory.NifiClusterTaskTimeout, errorfactory.NifiClusterTaskFailure:
-			return RequeueAfter(intervalTimeout)
-		default:
-			return RequeueWithError(r.Log, err.Error(), err)
+		for nodeId, nodeStatus := range instance.Status.NodesState {
+			if nodeStatus.GracefulActionState.State == v1alpha1.GracefulUpscaleRequired {
+				nodesWithUpscaleRequired = append(nodesWithUpscaleRequired, nodeId)
+			} else if nodeStatus.GracefulActionState.State == v1alpha1.GracefulDownscaleRequired {
+				nodesWithDownscaleRequired = append(nodesWithDownscaleRequired, nodeId)
+			}
 		}
-	}
 
-	var nodesWithDownscaleSucceeded []string
-
-	for nodeId, nodeStatus := range instance.Status.NodesState {
-		if nodeStatus.GracefulActionState.State == v1alpha1.GracefulDownscaleSucceeded {
-			nodesWithDownscaleSucceeded = append(nodesWithDownscaleRequired, nodeId)
+		if len(nodesWithUpscaleRequired) > 0 {
+			err = r.handlePodAddCCTask(instance, nodesWithUpscaleRequired)
+		} else if len(nodesWithDownscaleRequired) > 0 {
+			err = r.handlePodDeleteNCTask(instance, nodesWithDownscaleRequired)
 		}
-	}
 
-	if len(nodesWithDownscaleSucceeded) > 0 {
-		err = r.handleNodeRemoveStatus(instance, nodesWithDownscaleSucceeded)
+		if err != nil {
+			switch errors.Cause(err).(type) {
+			case errorfactory.NifiClusterNotReady:
+				return RequeueAfter(intervalNotReady)
+			case errorfactory.NifiClusterTaskRunning:
+				return RequeueAfter(intervalRunning)
+			case errorfactory.NifiClusterTaskTimeout, errorfactory.NifiClusterTaskFailure:
+				return RequeueAfter(intervalTimeout)
+			default:
+				return RequeueWithError(r.Log, err.Error(), err)
+			}
+		}
+
+		var nodesWithDownscaleSucceeded []string
+
+		for nodeId, nodeStatus := range instance.Status.NodesState {
+			if nodeStatus.GracefulActionState.State == v1alpha1.GracefulDownscaleSucceeded {
+				nodesWithDownscaleSucceeded = append(nodesWithDownscaleSucceeded, nodeId)
+			}
+		}
+
+		if len(nodesWithDownscaleSucceeded) > 0 {
+			err = r.handleNodeRemoveStatus(instance, nodesWithDownscaleSucceeded)
+			if err != nil {
+				return RequeueWithError(r.Log, "Failed to remove node status", err)
+			}
+		}
 	}
 
 	return Reconciled()

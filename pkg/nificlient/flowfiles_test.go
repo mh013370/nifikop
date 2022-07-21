@@ -31,7 +31,7 @@ func TestCreateDropRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testCreateDropRequest(t *testing.T, entity *nigoapi.DropRequestEntity, connectionId string, status int) (*nigoapi.DropRequestEntity, error) {
+func testCreateDropRequest(t *testing.T, entity *nigoapi.DropRequestEntity, connectionId string, status int) ([]*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -76,7 +76,7 @@ func TestGetDropRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetDropRequest(t *testing.T, entity *nigoapi.DropRequestEntity, connectionId string, status int) (*nigoapi.DropRequestEntity, error) {
+func testGetDropRequest(t *testing.T, entity *nigoapi.DropRequestEntity, connectionId string, status int) ([]*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 

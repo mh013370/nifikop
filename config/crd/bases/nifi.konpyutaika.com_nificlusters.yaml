@@ -3250,7 +3250,8 @@ spec:
                       type: array
                     isNode:
                       description: Set this to true if the instance is a node in a
-                        cluster. https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
+                        cluster. Set this to false if internal-standalone cluster
+                        type https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
                       type: boolean
                     nodeAffinity:
                       description: nodeAffinity can be specified, operator populates
@@ -3770,7 +3771,7 @@ spec:
                       type: array
                   type: object
                 description: nodeConfigGroups specifies multiple node configs with
-                  unique name
+                  unique name.
                 type: object
               nodeURITemplate:
                 description: nodeURITemplate used to dynamically compute node uri
@@ -3782,7 +3783,7 @@ spec:
                 type: string
               nodes:
                 description: all node requires an image, unique id, and storageConfigs
-                  settings
+                  settings (used if internal type)
                 items:
                   description: Node defines the nifi node basic configuration
                   properties:
@@ -5547,7 +5548,8 @@ spec:
                           type: array
                         isNode:
                           description: Set this to true if the instance is a node
-                            in a cluster. https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
+                            in a cluster. Set this to false if internal-standalone
+                            cluster type https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
                           type: boolean
                         nodeAffinity:
                           description: nodeAffinity can be specified, operator populates
@@ -8421,6 +8423,7 @@ spec:
                 enum:
                 - external
                 - internal
+                - internal-standalone
                 type: string
               zkAddress:
                 description: 'zKAddress specifies the ZooKeeper connection string
@@ -8501,6 +8504,9 @@ spec:
                 properties:
                   id:
                     description: The nifi reporting task's id
+                    type: string
+                  idSeed:
+                    description: the seed used to generate the reporting task ID
                     type: string
                   version:
                     description: The last nifi reporting task revision version catched

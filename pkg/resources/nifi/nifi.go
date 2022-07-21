@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers/dataflow"
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers/scale"
 	"github.com/konpyutaika/nifikop/pkg/nificlient/config"
@@ -19,7 +20,6 @@ import (
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers/controllersettings"
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers/reportingtask"
 
-	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/konpyutaika/nifikop/pkg/errorfactory"
 	"github.com/konpyutaika/nifikop/pkg/k8sutil"
 	"github.com/konpyutaika/nifikop/pkg/resources"
@@ -223,19 +223,24 @@ func (r *Reconciler) Reconcile(log zap.Logger) error {
 		return errors.WrapIf(err, "Failed to create HTTP client the for referenced cluster")
 	}
 
-	// TODO: Ensure usage and needing
-	err = scale.EnsureRemovedNodes(clientConfig, r.NifiCluster)
-	if err != nil && len(r.NifiCluster.Status.NodesState) > 0 {
-		return err
+	if !r.NifiCluster.IsStandalone() {
+		// TODO: Ensure usage and needing
+		err = scale.EnsureRemovedNodes(clientConfig, r.NifiCluster)
+		if err != nil && len(r.NifiCluster.Status.NodesState) > 0 {
+			return err
+		}
 	}
 
-	pgRootId, err := dataflow.RootProcessGroup(clientConfig)
-	if err != nil {
-		return err
-	}
+	// in standalone clusters, the root process group ID will be different on each node. So we don't bother updating here in this case.
+	if !clientConfig.IsStandalone {
+		pgRootId, err := dataflow.RootProcessGroup(clientConfig)
+		if err != nil {
+			return err
+		}
 
-	if err := k8sutil.UpdateRootProcessGroupIdStatus(r.Client, r.NifiCluster, pgRootId, log); err != nil {
-		return err
+		if err := k8sutil.UpdateRootProcessGroupIdStatus(r.Client, r.NifiCluster, pgRootId, log); err != nil {
+			return err
+		}
 	}
 
 	if clientConfig.UseSSL {
@@ -247,13 +252,13 @@ func (r *Reconciler) Reconcile(log zap.Logger) error {
 	if r.NifiCluster.Spec.ReadOnlyConfig.MaximumTimerDrivenThreadCount != nil ||
 		r.NifiCluster.Spec.ReadOnlyConfig.MaximumEventDrivenThreadCount != nil {
 		if err := r.reconcileMaximumThreadCounts(log); err != nil {
-			return errors.WrapIf(err, "failed to reconcile ressource")
+			return errors.WrapIf(err, "failed to reconcile resource")
 		}
 	}
 
 	if r.NifiCluster.Spec.GetMetricPort() != nil {
 		if err := r.reconcilePrometheusReportingTask(log); err != nil {
-			return errors.WrapIf(err, "failed to reconcile ressource")
+			return errors.WrapIf(err, "failed to reconcile resource")
 		}
 	}
 
@@ -305,10 +310,24 @@ OUTERLOOP:
 			}
 
 			if len(nodesPendingGracefulDownscale) > 0 {
-				err = k8sutil.UpdateNodeStatus(r.Client, nodesPendingGracefulDownscale, r.NifiCluster,
-					v1alpha1.GracefulActionState{
-						State: v1alpha1.GracefulDownscaleRequired,
-					}, log)
+				log.Info("Downscaling cluster as nodes have been removed from the spec.",
+					zap.String("clusterName", r.NifiCluster.Name),
+					zap.Strings("NodeIdsToBeRemoved", nodesPendingGracefulDownscale))
+				// for standalone clusters, we skip all NiFi clustering tasks and go straight to removing the pod.
+				if r.NifiCluster.IsStandalone() {
+					err = k8sutil.UpdateNodeStatus(r.Client, nodesPendingGracefulDownscale, r.NifiCluster,
+						v1alpha1.GracefulActionState{
+							ActionStep: v1alpha1.RemovePodAction,
+							State:      v1alpha1.GracefulDownscaleRequired,
+						}, log)
+
+				} else {
+					err = k8sutil.UpdateNodeStatus(r.Client, nodesPendingGracefulDownscale, r.NifiCluster,
+						v1alpha1.GracefulActionState{
+							State: v1alpha1.GracefulDownscaleRequired,
+						}, log)
+				}
+
 				if err != nil {
 					return errors.WrapIfWithDetails(err, "could not update status for node(s)", "id(s)",
 						strings.Join(nodesPendingGracefulDownscale, ","))
@@ -332,6 +351,9 @@ OUTERLOOP:
 						zap.String("nodeId", node.Labels["nodeId"]),
 						zap.String("ActionStep", string(nodeState.GracefulActionState.ActionStep)))
 				}
+				log.Debug("Node has been removed from NifiCluster, but is not in offload status or remove pod action. Skipping.",
+					zap.String("nodeId", node.Labels["nodeId"]),
+					zap.String("ActionStep", string(nodeState.GracefulActionState.ActionStep)))
 				continue
 			}
 
@@ -388,7 +410,8 @@ OUTERLOOP:
 			}
 
 			if !r.NifiCluster.Spec.Service.HeadlessEnabled {
-				err = r.Client.Delete(context.TODO(), &corev1.Service{ObjectMeta: templates.ObjectMeta(fmt.Sprintf("%s-%s", r.NifiCluster.Name, node.Labels["nodeId"]), nifiutil.LabelsForNifi(r.NifiCluster.Name), r.NifiCluster)})
+				err = r.Client.Delete(context.TODO(), &corev1.Service{
+					ObjectMeta: templates.ObjectMeta(nifiutil.ComputeNodeName(util.ConvertStringToInt32(node.Labels["nodeId"]), r.NifiCluster.Name), nifiutil.LabelsForNifi(r.NifiCluster.Name), r.NifiCluster)})
 				if err != nil {
 					if apierrors.IsNotFound(err) {
 						// can happen when node was not fully initialized and now is deleted
@@ -398,12 +421,20 @@ OUTERLOOP:
 				}
 			}
 
-			err = k8sutil.UpdateNodeStatus(r.Client, []string{node.Labels["nodeId"]}, r.NifiCluster,
-				v1alpha1.GracefulActionState{
-					ActionStep:  v1alpha1.RemovePodStatus,
-					State:       v1alpha1.GracefulDownscaleSucceeded,
-					TaskStarted: r.NifiCluster.Status.NodesState[node.Labels["nodeId"]].GracefulActionState.TaskStarted},
-				log)
+			if r.NifiCluster.IsStandalone() {
+				err = k8sutil.UpdateNodeStatus(r.Client, []string{node.Labels["nodeId"]}, r.NifiCluster,
+					v1alpha1.GracefulActionState{
+						State:       v1alpha1.GracefulDownscaleSucceeded,
+						TaskStarted: r.NifiCluster.Status.NodesState[node.Labels["nodeId"]].GracefulActionState.TaskStarted},
+					log)
+			} else {
+				err = k8sutil.UpdateNodeStatus(r.Client, []string{node.Labels["nodeId"]}, r.NifiCluster,
+					v1alpha1.GracefulActionState{
+						ActionStep:  v1alpha1.RemovePodStatus,
+						State:       v1alpha1.GracefulDownscaleSucceeded,
+						TaskStarted: r.NifiCluster.Status.NodesState[node.Labels["nodeId"]].GracefulActionState.TaskStarted},
+					log)
+			}
 			if err != nil {
 				return errors.WrapIfWithDetails(err, "could not update status for node(s)", "id(s)", node.Labels["nodeId"])
 			}
@@ -672,6 +703,17 @@ func (r *Reconciler) reconcileNifiPod(log zap.Logger, desiredPod *corev1.Pod) (e
 							err, "could not update node graceful action state"), false
 					}
 				}
+				// if this is a standalone cluster, then transition the action state to succeeded since there's no scaling needed.
+				if val, found := r.NifiCluster.Status.NodesState[desiredPod.Labels["nodeId"]]; found &&
+					r.NifiCluster.IsStandalone() &&
+					val.GracefulActionState.State == v1alpha1.GracefulUpscaleRequired &&
+					k8sutil.PodReady(currentPod) {
+					if err := k8sutil.UpdateNodeStatus(r.Client, []string{desiredPod.Labels["nodeId"]}, r.NifiCluster,
+						v1alpha1.GracefulActionState{ErrorMessage: "", State: v1alpha1.GracefulUpscaleSucceeded}, log); err != nil {
+						return errorfactory.New(errorfactory.StatusUpdateError{},
+							err, "could not update node graceful action state"), false
+					}
+				}
 
 				log.Debug("pod resource is in sync",
 					zap.String("clusterName", r.NifiCluster.Name),
@@ -916,18 +958,16 @@ func (r *Reconciler) reconcilePrometheusReportingTask(log zap.Logger) error {
 		return err
 	}
 
-	// Check if the NiFi reporting task already exist
-	exist, err := reportingtask.ExistReportingTaks(clientConfig, r.NifiCluster)
+	// Create the reporting task if it doesn't exist
+	status, err := reportingtask.CreateIfNotExists(clientConfig, r.NifiCluster)
 	if err != nil {
-		return errors.WrapIfWithDetails(err, "failure checking for existing prometheus reporting task")
+		return errors.WrapIfWithDetails(err, "failure creating prometheus reporting task")
 	}
-
-	if !exist {
-		// Create reporting task
-		status, err := reportingtask.CreateReportingTask(clientConfig, r.NifiCluster)
-		if err != nil {
-			return errors.WrapIfWithDetails(err, "failure creating prometheus reporting task")
-		}
+	if status != nil {
+		log.Info("Configured prometheus reporting task",
+			zap.String("reportingTaskId", status.Id),
+			zap.String("reportingTaskIdSeed", status.IdSeed),
+			zap.String("clusterName", r.NifiCluster.Name))
 
 		r.NifiCluster.Status.PrometheusReportingTask = *status
 		if err := r.Client.Status().Update(context.TODO(), r.NifiCluster); err != nil {
@@ -936,7 +976,7 @@ func (r *Reconciler) reconcilePrometheusReportingTask(log zap.Logger) error {
 	}
 
 	// Sync prometheus reporting task resource with NiFi side component
-	status, err := reportingtask.SyncReportingTask(clientConfig, r.NifiCluster)
+	status, err = reportingtask.SyncReportingTask(clientConfig, r.NifiCluster)
 	if err != nil {
 		return errors.WrapIfWithDetails(err, "failed to sync PrometheusReportingTask")
 	}

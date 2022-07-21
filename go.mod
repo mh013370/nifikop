@@ -3,17 +3,14 @@ module github.com/konpyutaika/nifikop
 go 1.18
 
 require (
-	emperror.dev/errors v0.4.2
-	github.com/antihax/optional v1.0.0
+	emperror.dev/errors v0.8.0
 	github.com/banzaicloud/k8s-objectmatcher v1.4.1
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.3
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/imdario/mergo v0.3.12
-	github.com/jarcoal/httpmock v1.0.6
+	github.com/jarcoal/httpmock v1.2.0
 	github.com/jetstack/cert-manager v1.7.2
-	github.com/konpyutaika/nigoapi v0.0.6
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/pavel-v-chernykh/keystore-go v2.1.0+incompatible
@@ -25,6 +22,8 @@ require (
 	k8s.io/klog/v2 v2.60.1
 	sigs.k8s.io/controller-runtime v0.12.1
 )
+
+require github.com/antihax/optional v1.0.0
 
 require (
 	cloud.google.com/go v0.90.0 // indirect
@@ -52,10 +51,11 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/konpyutaika/nigoapi v0.0.6
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/konpyutaika/nifikop/api/v1alpha1"
 	"github.com/konpyutaika/nifikop/pkg/common"
 	"github.com/konpyutaika/nifikop/pkg/errorfactory"
@@ -45,8 +45,15 @@ func (n *basic) BuildConnect() (cluster clientconfig.ClusterConnect, err error) 
 		return nil, err
 	}
 
-	if !c.IsExternal() {
+	if c.IsInternal() {
 		cluster = &nificluster.InternalCluster{
+			Name:      c.Name,
+			Namespace: c.Namespace,
+			Status:    c.Status,
+		}
+		return
+	} else if c.IsStandalone() {
+		cluster = &nificluster.StandaloneCluster{
 			Name:      c.Name,
 			Namespace: c.Namespace,
 			Status:    c.Status,
@@ -83,6 +90,7 @@ func clusterConfig(client client.Client, cluster *v1alpha1.NifiCluster) (*client
 	conf.UseSSL = true
 	conf.TLSConfig = &tls.Config{RootCAs: rootCAs}
 	conf.SkipDescribeCluster = true
+	conf.IsStandalone = cluster.IsStandalone()
 
 	secretName := fmt.Sprintf(templates.ExternalClusterSecretTemplate, cluster.Name)
 	basicSecret, err := GetAccessTokenSecret(client, v1alpha1.SecretReference{Name: secretName, Namespace: cluster.Namespace})

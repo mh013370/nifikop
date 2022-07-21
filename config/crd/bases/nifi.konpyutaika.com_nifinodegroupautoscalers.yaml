@@ -1687,7 +1687,7 @@ spec:
                     type: array
                   isNode:
                     description: Set this to true if the instance is a node in a cluster.
-                      https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
+                      Set this to false if internal-standalone cluster type https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
                     type: boolean
                   nodeAffinity:
                     description: nodeAffinity can be specified, operator populates

@@ -5,38 +5,69 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *nifiClient) GetDropRequest(connectionId, id string) (*nigoapi.DropRequestEntity, error) {
+func (n *nifiClient) GetDropRequest(connectionId, id string) ([]*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorClient()
-	if client == nil {
+	clients := n.privilegeCoordinatorClients()
+	if len(clients) == 0 {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return nil, ErrNoNodeClientsAvailable
 	}
 
+	entities := []*ClientEntityPair[nigoapi.DropRequestEntity]{}
+	for _, clientPair := range clients {
+		entityPair, err := n.GetDropRequestWithClient(connectionId, id, clientPair)
+		if err != nil {
+			return entities, err
+		}
+		entities = append(entities, entityPair)
+	}
+
+	return entities, nil
+}
+
+func (n *nifiClient) GetDropRequestWithClient(connectionId, id string, client ClientContextPair) (*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 	// Request on Nifi Rest API to get the drop request information
-	dropRequest, rsp, body, err := client.FlowfileQueuesApi.GetDropRequest(context, connectionId, id)
+	dropRequest, rsp, body, err := client.Client.FlowfileQueuesApi.GetDropRequest(client.Context, connectionId, id)
 	if err := errorGetOperation(rsp, body, err, n.log); err != nil {
 		return nil, err
 	}
 
-	return &dropRequest, nil
+	return &ClientEntityPair[nigoapi.DropRequestEntity]{
+		Client: client,
+		Entity: &dropRequest,
+	}, nil
 }
 
-func (n *nifiClient) CreateDropRequest(connectionId string) (*nigoapi.DropRequestEntity, error) {
+func (n *nifiClient) CreateDropRequest(connectionId string) ([]*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorClient()
-	if client == nil {
+	clients := n.privilegeCoordinatorClients()
+	if len(clients) == 0 {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return nil, ErrNoNodeClientsAvailable
 	}
 
+	entities := []*ClientEntityPair[nigoapi.DropRequestEntity]{}
+	for _, clientPair := range clients {
+		entityPair, err := n.CreateDropRequestWithClient(connectionId, clientPair)
+		if err != nil {
+			return entities, err
+		}
+		entities = append(entities, entityPair)
+	}
+	return entities, nil
+}
+
+func (n *nifiClient) CreateDropRequestWithClient(connectionId string, client ClientContextPair) (*ClientEntityPair[nigoapi.DropRequestEntity], error) {
 	// Request on Nifi Rest API to create the drop Request
-	entity, rsp, body, err := client.FlowfileQueuesApi.CreateDropRequest(context, connectionId)
+	entity, rsp, body, err := client.Client.FlowfileQueuesApi.CreateDropRequest(client.Context, connectionId)
 	if err := errorCreateOperation(rsp, body, err, n.log); err != nil {
 		return nil, err
 	}
 
-	return &entity, nil
+	return &ClientEntityPair[nigoapi.DropRequestEntity]{
+		Client: client,
+		Entity: &entity,
+	}, nil
 }
 
 // TODO : when last supported will be NiFi 1.12.X

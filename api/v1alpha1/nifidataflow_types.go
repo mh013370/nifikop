@@ -49,6 +49,8 @@ type UpdateRequest struct {
 	Type DataflowUpdateRequestType `json:"type"`
 	// the id of the update request.
 	Id string `json:"id"`
+	// the seed used to create the update request ID
+	IdSeed string `json:"idSeed,omitempty"`
 	// the uri for this request.
 	Uri string `json:"uri"`
 	// the last time this request was updated.
@@ -68,6 +70,8 @@ type DropRequest struct {
 	ConnectionId string `json:"connectionId"`
 	// the id for this drop request.
 	Id string `json:"id"`
+	// the seed used to create the drop request ID
+	IdSeed string `json:"idSeed,omitempty"`
 	// the uri for this request.
 	Uri string `json:"uri"`
 	// the last time this request was updated.
@@ -104,6 +108,8 @@ type DropRequest struct {
 type NifiDataflowStatus struct {
 	// process Group ID
 	ProcessGroupID string `json:"processGroupID"`
+	// seed used to reliably set component UUIDs (only used in standalone cluster scenarios)
+	ProcessGroupIDSeed string `json:"processGroupIDSeed,omitempty"`
 	// the dataflow current state.
 	State DataflowState `json:"state"`
 	// the latest version update request sent.

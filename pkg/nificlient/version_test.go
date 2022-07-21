@@ -33,7 +33,7 @@ func TestCreateVersionUpdateRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testCreateVersionUpdateRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, status int) (*nigoapi.VersionedFlowUpdateRequestEntity, error) {
+func testCreateVersionUpdateRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, status int) ([]*ClientEntityPair[nigoapi.VersionedFlowUpdateRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -82,7 +82,7 @@ func TestGetVersionUpdateRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetVersionUpdateRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, id string, status int) (*nigoapi.VersionedFlowUpdateRequestEntity, error) {
+func testGetVersionUpdateRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, id string, status int) ([]*ClientEntityPair[nigoapi.VersionedFlowUpdateRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -129,7 +129,7 @@ func TestCreateVersionRevertRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testCreateVersionRevertRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, status int) (*nigoapi.VersionedFlowUpdateRequestEntity, error) {
+func testCreateVersionRevertRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, status int) ([]*ClientEntityPair[nigoapi.VersionedFlowUpdateRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -178,7 +178,7 @@ func TestGetVersionRevertRequest(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetVersionRevertRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, id string, status int) (*nigoapi.VersionedFlowUpdateRequestEntity, error) {
+func testGetVersionRevertRequest(t *testing.T, entity *nigoapi.VersionControlInformationEntity, id string, status int) ([]*ClientEntityPair[nigoapi.VersionedFlowUpdateRequestEntity], error) {
 
 	cluster := testClusterMock(t)
 

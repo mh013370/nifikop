@@ -166,6 +166,9 @@ spec:
                   id:
                     description: the id for this drop request.
                     type: string
+                  idSeed:
+                    description: the seed used to create the drop request ID
+                    type: string
                   lastUpdated:
                     description: the last time this request was updated.
                     type: string
@@ -226,6 +229,9 @@ spec:
                   id:
                     description: the id of the update request.
                     type: string
+                  idSeed:
+                    description: the seed used to create the update request ID
+                    type: string
                   lastUpdated:
                     description: the last time this request was updated.
                     type: string
@@ -255,6 +261,10 @@ spec:
                 type: object
               processGroupID:
                 description: process Group ID
+                type: string
+              processGroupIDSeed:
+                description: seed used to reliably set component UUIDs (only used
+                  in standalone cluster scenarios)
                 type: string
               state:
                 description: the dataflow current state.

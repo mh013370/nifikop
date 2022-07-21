@@ -135,6 +135,9 @@ spec:
               id:
                 description: The nifi user's node id
                 type: string
+              idSeed:
+                description: The seed used to generate the user's id
+                type: string
               version:
                 description: The last nifi  user's node revision version catched
                 format: int64

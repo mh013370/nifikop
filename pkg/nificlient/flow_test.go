@@ -28,7 +28,7 @@ func TestGetFlow(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetFlow(t *testing.T, id string, status int) (*nigoapi.ProcessGroupFlowEntity, error) {
+func testGetFlow(t *testing.T, id string, status int) ([]*ClientEntityPair[nigoapi.ProcessGroupFlowEntity], error) {
 
 	pgId := "16cfd2ec-2174-1065-0650-10004b9b35cc"
 	parameterContext := MockParameterContext("16cfd2ec-0174-1000-0000-00004b9b35cc", "test-unit",
@@ -92,7 +92,7 @@ func TestGetFlowControllerServices(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetFlowControllerServices(t *testing.T, pgId string, status int) (*nigoapi.ControllerServicesEntity, error) {
+func testGetFlowControllerServices(t *testing.T, pgId string, status int) ([]*ClientEntityPair[nigoapi.ControllerServicesEntity], error) {
 
 	cs := []nigoapi.ControllerServiceEntity{
 		MockControllerService(
@@ -151,7 +151,7 @@ func TestUpdateFlowControllerServices(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testUpdateFlowControllerServices(t *testing.T, entity *nigoapi.ControllerServicesEntity, pgId string, status int) (*nigoapi.ActivateControllerServicesEntity, error) {
+func testUpdateFlowControllerServices(t *testing.T, entity *nigoapi.ControllerServicesEntity, pgId string, status int) ([]*ClientEntityPair[nigoapi.ActivateControllerServicesEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -193,7 +193,7 @@ func TestUpdateFlowProcessGroup(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testUpdateFlowProcessGroup(t *testing.T, entity nigoapi.ScheduleComponentsEntity, status int) (*nigoapi.ScheduleComponentsEntity, error) {
+func testUpdateFlowProcessGroup(t *testing.T, entity nigoapi.ScheduleComponentsEntity, status int) ([]*ClientEntityPair[nigoapi.ScheduleComponentsEntity], error) {
 
 	cluster := testClusterMock(t)
 

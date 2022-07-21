@@ -5,15 +5,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// All logging here is debug since all clients report errors in log messages already.
+// These can be seen through debug logging.
+
 func ErrorUpdateOperation(log *zap.Logger, err error, action string) error {
 	if err == nificlient.ErrNifiClusterNotReturned200 {
-		log.Error("failed since Nifi node returned non 200",
+		log.Debug("failed since Nifi node returned non 200",
 			zap.String("action", action),
 			zap.Error(err))
 	}
 
 	if err != nil {
-		log.Error("could not communicate with nifi node",
+		log.Debug("could not communicate with nifi node",
 			zap.String("action", action),
 			zap.Error(err))
 	}
@@ -22,13 +25,13 @@ func ErrorUpdateOperation(log *zap.Logger, err error, action string) error {
 
 func ErrorGetOperation(log *zap.Logger, err error, action string) error {
 	if err == nificlient.ErrNifiClusterNotReturned200 {
-		log.Error("failed since Nifi node returned non 200",
+		log.Debug("failed since Nifi node returned non 200",
 			zap.String("action", action),
 			zap.Error(err))
 	}
 
 	if err != nil {
-		log.Error("could not communicate with nifi node",
+		log.Debug("could not communicate with nifi node",
 			zap.String("action", action),
 			zap.Error(err))
 	}
@@ -38,13 +41,13 @@ func ErrorGetOperation(log *zap.Logger, err error, action string) error {
 
 func ErrorCreateOperation(log *zap.Logger, err error, action string) error {
 	if err == nificlient.ErrNifiClusterNotReturned201 {
-		log.Error("failed since Nifi node returned non 201",
+		log.Debug("failed since Nifi node returned non 201",
 			zap.String("action", action),
 			zap.Error(err))
 	}
 
 	if err != nil {
-		log.Error("could not communicate with nifi node",
+		log.Debug("could not communicate with nifi node",
 			zap.String("action", action),
 			zap.Error(err))
 	}
@@ -54,13 +57,13 @@ func ErrorCreateOperation(log *zap.Logger, err error, action string) error {
 
 func ErrorRemoveOperation(log *zap.Logger, err error, action string) error {
 	if err == nificlient.ErrNifiClusterNotReturned200 {
-		log.Error("failed since Nifi node returned non 200",
+		log.Debug("failed since Nifi node returned non 200",
 			zap.String("action", action),
 			zap.Error(err))
 	}
 
 	if err != nil {
-		log.Error("could not communicate with nifi node",
+		log.Debug("could not communicate with nifi node",
 			zap.String("action", action),
 			zap.Error(err))
 	}

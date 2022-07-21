@@ -80,7 +80,7 @@ func (c *certManager) FinalizePKI(ctx context.Context, logger zap.Logger) error 
 }
 
 func (c *certManager) ReconcilePKI(ctx context.Context, logger zap.Logger, scheme *runtime.Scheme, externalHostnames []string) (err error) {
-	logger.Info("Reconciling cert-manager PKI",
+	logger.Debug("Reconciling cert-manager PKI",
 		zap.String("clusterName", c.cluster.Name))
 
 	resources, err := c.

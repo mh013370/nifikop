@@ -28,7 +28,7 @@ func TestGetRegistryClient(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetRegistryClient(t *testing.T, id string, status int) (*nigoapi.RegistryClientEntity, error) {
+func testGetRegistryClient(t *testing.T, id string, status int) ([]*ClientEntityPair[nigoapi.RegistryClientEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -69,7 +69,7 @@ func TestCreateRegistryClient(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testCreateRegistryClient(t *testing.T, entity *nigoapi.RegistryClientEntity, status int) (*nigoapi.RegistryClientEntity, error) {
+func testCreateRegistryClient(t *testing.T, entity *nigoapi.RegistryClientEntity, status int) ([]*ClientEntityPair[nigoapi.RegistryClientEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -110,7 +110,7 @@ func TestUpdateRegistryClient(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testUpdateRegistryClient(t *testing.T, entity *nigoapi.RegistryClientEntity, status int) (*nigoapi.RegistryClientEntity, error) {
+func testUpdateRegistryClient(t *testing.T, entity *nigoapi.RegistryClientEntity, status int) ([]*ClientEntityPair[nigoapi.RegistryClientEntity], error) {
 
 	cluster := testClusterMock(t)
 

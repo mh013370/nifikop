@@ -128,6 +128,9 @@ spec:
               id:
                 description: The nifi usergroup's node id
                 type: string
+              idSeed:
+                description: The ID used to generate the usergroup's id
+                type: string
               version:
                 description: The last nifi usergroup's node revision version catched
                 format: int64

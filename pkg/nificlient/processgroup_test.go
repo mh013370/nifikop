@@ -28,7 +28,7 @@ func TestGetProcessGroup(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testGetProcessGroup(t *testing.T, id string, status int) (*nigoapi.ProcessGroupEntity, error) {
+func testGetProcessGroup(t *testing.T, id string, status int) ([]*ClientEntityPair[nigoapi.ProcessGroupEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -83,7 +83,7 @@ func TestCreateProcessGroup(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testCreateProcessGroup(t *testing.T, entity *nigoapi.ProcessGroupEntity, status int) (*nigoapi.ProcessGroupEntity, error) {
+func testCreateProcessGroup(t *testing.T, entity *nigoapi.ProcessGroupEntity, status int) ([]*ClientEntityPair[nigoapi.ProcessGroupEntity], error) {
 
 	cluster := testClusterMock(t)
 
@@ -131,7 +131,7 @@ func TestUpdateProcessGroup(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testUpdateProcessGroup(t *testing.T, entity *nigoapi.ProcessGroupEntity, status int) (*nigoapi.ProcessGroupEntity, error) {
+func testUpdateProcessGroup(t *testing.T, entity *nigoapi.ProcessGroupEntity, status int) ([]*ClientEntityPair[nigoapi.ProcessGroupEntity], error) {
 
 	cluster := testClusterMock(t)
 

@@ -3,6 +3,7 @@ kind: NifiCluster
 metadata:
   name: simplenifi
 spec:
+  type: internal-standalone
   service:
     headlessEnabled: true
     labels:
@@ -32,7 +33,7 @@ spec:
   nodeConfigGroups:
     default_group:
       imagePullPolicy: IfNotPresent
-      isNode: true
+      isNode: false
       serviceAccountName: default
       storageConfigs:
         - mountPath: "/opt/nifi/nifi-current/logs"
@@ -73,6 +74,3 @@ spec:
       - containerPort: 9090
         type: prometheus
         name: prometheus
-      - containerPort: 6342
-        type: load-balance
-        name: load-balance

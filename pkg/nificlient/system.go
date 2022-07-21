@@ -5,9 +5,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func (n *nifiClient) DescribeCluster() (*nigoapi.ClusterEntity, error) {
+func (n *nifiClient) DescribeCluster() (*ClientEntityPair[nigoapi.ClusterEntity], error) {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorClient()
+	client, context, nodeId := n.privilegeCoordinatorClient()
 	if client == nil {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return nil, ErrNoNodeClientsAvailable
@@ -18,10 +18,17 @@ func (n *nifiClient) DescribeCluster() (*nigoapi.ClusterEntity, error) {
 		return nil, err
 	}
 
-	return &clusterEntry, nil
+	return &ClientEntityPair[nigoapi.ClusterEntity]{
+		Client: ClientContextPair{
+			Client:  client,
+			Context: context,
+			NodeId:  nodeId,
+		},
+		Entity: &clusterEntry,
+	}, nil
 }
 
-func (n *nifiClient) DescribeClusterFromNodeId(nodeId int32) (*nigoapi.ClusterEntity, error) {
+func (n *nifiClient) DescribeClusterFromNodeId(nodeId int32) (*ClientEntityPair[nigoapi.ClusterEntity], error) {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
 	client := n.nodeClient[nodeId]
 	context := n.opts.NodesContext[nodeId]
@@ -35,12 +42,18 @@ func (n *nifiClient) DescribeClusterFromNodeId(nodeId int32) (*nigoapi.ClusterEn
 		return nil, err
 	}
 
-	return &clusterEntry, nil
+	return &ClientEntityPair[nigoapi.ClusterEntity]{
+		Client: ClientContextPair{
+			Client:  client,
+			Context: context,
+		},
+		Entity: &clusterEntry,
+	}, nil
 }
 
-func (n *nifiClient) GetClusterNode(nId int32) (*nigoapi.NodeEntity, error) {
+func (n *nifiClient) GetClusterNode(nId int32) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorExceptNodeIdClient(nId)
+	client, context, nodeId := n.privilegeCoordinatorExceptNodeIdClient(nId)
 	if client == nil {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return nil, ErrNoNodeClientsAvailable
@@ -60,24 +73,31 @@ func (n *nifiClient) GetClusterNode(nId int32) (*nigoapi.NodeEntity, error) {
 		return nil, err
 	}
 
-	return &nodeEntity, nil
+	return &ClientEntityPair[nigoapi.NodeEntity]{
+		Client: ClientContextPair{
+			Client:  client,
+			Context: context,
+			NodeId:  nodeId,
+		},
+		Entity: &nodeEntity,
+	}, nil
 }
 
-func (n *nifiClient) DisconnectClusterNode(nId int32) (*nigoapi.NodeEntity, error) {
+func (n *nifiClient) DisconnectClusterNode(nId int32) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	// Request to update the node status to DISCONNECTING
 	nodeEntity, err := n.setClusterNodeStatus(nId, DISCONNECTING_STATUS, DISCONNECTED_STATUS)
 
 	return setClusterNodeStatusReturn(nodeEntity, err, "Disconnect cluster gracefully failed since Nifi node returned non 200", n.log)
 }
 
-func (n *nifiClient) ConnectClusterNode(nId int32) (*nigoapi.NodeEntity, error) {
+func (n *nifiClient) ConnectClusterNode(nId int32) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	// Request to update the node status to CONNECTING
 	nodeEntity, err := n.setClusterNodeStatus(nId, CONNECTING_STATUS, CONNECTED_STATUS)
 
 	return setClusterNodeStatusReturn(nodeEntity, err, "Connect node gracefully failed since Nifi node returned non 200", n.log)
 }
 
-func (n *nifiClient) OffloadClusterNode(nId int32) (*nigoapi.NodeEntity, error) {
+func (n *nifiClient) OffloadClusterNode(nId int32) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	// Request to update the node status to OFFLOADING
 	nodeEntity, err := n.setClusterNodeStatus(nId, OFFLOADING_STATUS, OFFLOADED_STATUS)
 
@@ -93,7 +113,7 @@ func (n *nifiClient) RemoveClusterNode(nId int32) error {
 	}
 
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorExceptNodeIdClient(nId)
+	client, context, _ := n.privilegeCoordinatorExceptNodeIdClient(nId)
 	if client == nil {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return ErrNoNodeClientsAvailable
@@ -107,7 +127,7 @@ func (n *nifiClient) RemoveClusterNode(nId int32) error {
 
 func (n *nifiClient) RemoveClusterNodeFromClusterNodeId(nId string) error {
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorClient()
+	client, context, _ := n.privilegeCoordinatorClient()
 	if client == nil {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return ErrNoNodeClientsAvailable
@@ -119,9 +139,10 @@ func (n *nifiClient) RemoveClusterNodeFromClusterNodeId(nId string) error {
 	return errorDeleteOperation(rsp, body, err, n.log)
 }
 
-func (n *nifiClient) setClusterNodeStatus(nId int32, status, expectedActionStatus string) (*nigoapi.NodeEntity, error) {
+func (n *nifiClient) setClusterNodeStatus(nId int32, status, expectedActionStatus string) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	// Find the Cluster node associated to the NifiCluster nodeId
 	targetedNode := n.nodeDtoByNodeId(nId)
+
 	if targetedNode == nil {
 		n.log.Error("Error during preparing the request", zap.Error(ErrNifiClusterNodeNotFound))
 		return nil, ErrNifiClusterNodeNotFound
@@ -133,11 +154,14 @@ func (n *nifiClient) setClusterNodeStatus(nId int32, status, expectedActionStatu
 		targetedNode.Status == status {
 
 		node := nigoapi.NodeEntity{Node: targetedNode}
-		return &node, nil
+		return &ClientEntityPair[nigoapi.NodeEntity]{
+			Client: ClientContextPair{},
+			Entity: &node,
+		}, nil
 	}
 
 	// Get nigoapi client, favoring the one associated to the coordinator node.
-	client, context := n.privilegeCoordinatorExceptNodeIdClient(nId)
+	client, context, nodeId := n.privilegeCoordinatorExceptNodeIdClient(nId)
 	if client == nil {
 		n.log.Error("Error during creating node client", zap.Error(ErrNoNodeClientsAvailable))
 		return nil, ErrNoNodeClientsAvailable
@@ -153,10 +177,17 @@ func (n *nifiClient) setClusterNodeStatus(nId int32, status, expectedActionStatu
 	}
 
 	n.setNodeFromNodes(nodeEntity.Node)
-	return &nodeEntity, nil
+	return &ClientEntityPair[nigoapi.NodeEntity]{
+		Client: ClientContextPair{
+			Client:  client,
+			Context: context,
+			NodeId:  nodeId,
+		},
+		Entity: &nodeEntity,
+	}, nil
 }
 
-func setClusterNodeStatusReturn(nodeEntity *nigoapi.NodeEntity, err error, messageError string, log *zap.Logger) (*nigoapi.NodeEntity, error) {
+func setClusterNodeStatusReturn(nodeEntity *ClientEntityPair[nigoapi.NodeEntity], err error, messageError string, log *zap.Logger) (*ClientEntityPair[nigoapi.NodeEntity], error) {
 	if err != nil && err != ErrNifiClusterNotReturned200 {
 		log.Error(messageError+" error since Nifi node returned non 200", zap.Error(err))
 		return nil, err

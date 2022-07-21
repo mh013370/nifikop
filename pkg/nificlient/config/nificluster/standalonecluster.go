@@ -7,28 +7,30 @@ import (
 	"go.uber.org/zap"
 )
 
-type InternalCluster struct {
+// a standalone cluster is assumed to be internal
+type StandaloneCluster struct {
 	Status    v1alpha1.NifiClusterStatus
 	Name      string
 	Namespace string
 }
 
-func (cluster *InternalCluster) ClusterLabelString() string {
+func (cluster *StandaloneCluster) ClusterLabelString() string {
 	return fmt.Sprintf("%s.%s", cluster.Name, cluster.Namespace)
 }
 
-func (c *InternalCluster) IsInternal() bool {
+func (c *StandaloneCluster) IsInternal() bool {
+	return false
+}
+
+func (c *StandaloneCluster) IsExternal() bool {
+	return false
+}
+
+func (c *StandaloneCluster) IsStandalone() bool {
 	return true
 }
 
-func (c *InternalCluster) IsExternal() bool {
-	return false
-}
-func (c *InternalCluster) IsStandalone() bool {
-	return false
-}
-
-func (c *InternalCluster) IsReady(log zap.Logger) bool {
+func (c *StandaloneCluster) IsReady(log zap.Logger) bool {
 	for _, nodeState := range c.Status.NodesState {
 		if nodeState.ConfigurationState != v1alpha1.ConfigInSync || nodeState.GracefulActionState.State != v1alpha1.GracefulUpscaleSucceeded ||
 			!nodeState.PodIsReady {
@@ -38,6 +40,6 @@ func (c *InternalCluster) IsReady(log zap.Logger) bool {
 	return c.Status.State.IsReady()
 }
 
-func (c *InternalCluster) Id() string {
+func (c *StandaloneCluster) Id() string {
 	return c.Name
 }

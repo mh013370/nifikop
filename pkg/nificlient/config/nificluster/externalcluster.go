@@ -27,6 +27,10 @@ func (cluster *ExternalCluster) IsInternal() bool {
 	return false
 }
 
+func (cluster *ExternalCluster) IsStandalone() bool {
+	return false
+}
+
 func (cluster *ExternalCluster) ClusterLabelString() string {
 	return fmt.Sprintf("%s", cluster.Name)
 }
@@ -42,7 +46,7 @@ func (cluster ExternalCluster) IsReady(log zap.Logger) bool {
 		return false
 	}
 
-	for _, node := range clusterEntity.Cluster.Nodes {
+	for _, node := range clusterEntity.Entity.Cluster.Nodes {
 		if node.Status != nificlient.CONNECTED_STATUS {
 			return false
 		}

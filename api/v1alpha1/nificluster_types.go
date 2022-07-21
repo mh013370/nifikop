@@ -30,7 +30,7 @@ type NifiClusterSpec struct {
 	// +kubebuilder:validation:Enum={"tls","basic"}
 	ClientType ClientConfigType `json:"clientType,omitempty"`
 	// type defines if the cluster is internal (i.e manager by the operator) or external.
-	// +kubebuilder:validation:Enum={"external","internal"}
+	// +kubebuilder:validation:Enum={"external","internal","internal-standalone"}
 	Type ClusterType `json:"type,omitempty"`
 	// nodeURITemplate used to dynamically compute node uri (used if external type)
 	NodeURITemplate string `json:"nodeURITemplate,omitempty"`
@@ -73,11 +73,11 @@ type NifiClusterSpec struct {
 	// readOnlyConfig specifies the read-only type Nifi config cluster wide, all theses
 	// will be merged with node specified readOnly configurations, so it can be overwritten per node.
 	ReadOnlyConfig ReadOnlyConfig `json:"readOnlyConfig,omitempty"`
-	// nodeConfigGroups specifies multiple node configs with unique name
+	// nodeConfigGroups specifies multiple node configs with unique name.
 	NodeConfigGroups map[string]NodeConfig `json:"nodeConfigGroups,omitempty"`
 	// NodeUserIdentityTemplate specifies the template to be used when naming the node user identity (e.g. node-%d-mysuffix)
 	NodeUserIdentityTemplate *string `json:"nodeUserIdentityTemplate,omitempty"`
-	// all node requires an image, unique id, and storageConfigs settings
+	// all node requires an image, unique id, and storageConfigs settings (used if internal type)
 	Nodes []Node `json:"nodes" patchStrategy:"merge" patchMergeKey:"id"`
 	// Defines the configuration for PodDisruptionBudget
 	DisruptionBudget DisruptionBudget `json:"disruptionBudget,omitempty"`
@@ -275,7 +275,7 @@ type NodeConfig struct {
 	// FSGroup define the id of the group for each volumes in Nifi image
 	// +kubebuilder:validation:Minimum=1
 	FSGroup *int64 `json:"fsGroup,omitempty"`
-	// Set this to true if the instance is a node in a cluster.
+	// Set this to true if the instance is a node in a cluster. Set this to false if internal-standalone cluster type
 	// https://nifi.apache.org/docs/nifi-docs/html/administration-guide.html#basic-cluster-setup
 	IsNode *bool `json:"isNode,omitempty"`
 	//  Docker image used by the operator to create the node associated
@@ -521,6 +521,8 @@ type NifiClusterStatus struct {
 type PrometheusReportingTaskStatus struct {
 	// The nifi reporting task's id
 	Id string `json:"id"`
+	// the seed used to generate the reporting task ID
+	IdSeed string `json:"idSeed,omitempty"`
 	// The last nifi reporting task revision version catched
 	Version int64 `json:"version"`
 }
@@ -776,11 +778,12 @@ func (c *NifiCluster) GetType() ClusterType {
 	if c.Spec.Type == "" {
 		return InternalCluster
 	}
-	return ExternalCluster
+	return c.Spec.Type
 }
 
 func (c *NifiCluster) IsSet() bool {
 	return (c.GetType() == InternalCluster && len(c.Name) != 0) ||
+		(c.GetType() == StandaloneCluster && len(c.Name) != 0) ||
 		(c.GetType() != ExternalCluster && len(c.Spec.NodeURITemplate) != 0 && len(c.Spec.RootProcessGroupId) != 0)
 }
 
@@ -788,8 +791,12 @@ func (c *NifiCluster) IsInternal() bool {
 	return c.GetType() == InternalCluster
 }
 
-func (c NifiCluster) IsExternal() bool {
-	return c.GetType() != InternalCluster
+func (c *NifiCluster) IsExternal() bool {
+	return c.GetType() == ExternalCluster
+}
+
+func (c *NifiCluster) IsStandalone() bool {
+	return c.GetType() == StandaloneCluster
 }
 
 func (cluster NifiCluster) IsReady() bool {

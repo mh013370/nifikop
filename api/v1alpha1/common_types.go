@@ -262,8 +262,9 @@ const (
 )
 
 const (
-	ExternalCluster ClusterType = "external"
-	InternalCluster ClusterType = "internal"
+	ExternalCluster   ClusterType = "external"
+	InternalCluster   ClusterType = "internal"
+	StandaloneCluster ClusterType = "internal-standalone"
 )
 
 const (
@@ -345,6 +346,14 @@ type NodeState struct {
 	// LastUpdatedTime is the last time at which this node was updated. This must be sortable.
 	// +optional
 	LastUpdatedTime metav1.Time `json:"lastUpdatedTime,omitempty"`
+}
+
+func (n NodeState) IsInitClusterNode() bool {
+	if n.InitClusterNode {
+		return true
+	} else {
+		return false
+	}
 }
 
 // RackAwarenessState holds info about rack awareness status

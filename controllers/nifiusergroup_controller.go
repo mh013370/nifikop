@@ -81,23 +81,23 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Error reading the object - requeue the request.
 		return RequeueWithError(r.Log, err.Error(), err)
 	}
+	current := instance.DeepCopy()
 
 	// Get the last configuration viewed by the operator.
 	o, err := patch.DefaultAnnotator.GetOriginalConfiguration(instance)
 	// Create it if not exist.
 	if o == nil {
 		if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(instance); err != nil {
-			return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+instance.Name, err)
+			return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+current.Name, err)
 		}
 		if err := r.Client.Update(ctx, instance); err != nil {
-			return RequeueWithError(r.Log, "failed to update NifiUserGroup "+instance.Name, err)
+			return RequeueWithError(r.Log, "failed to update NifiUserGroup "+current.Name, err)
 		}
 		o, err = patch.DefaultAnnotator.GetOriginalConfiguration(instance)
 	}
 
 	// Check if the cluster reference changed.
 	original := &v1alpha1.NifiUserGroup{}
-	current := instance.DeepCopy()
 	json.Unmarshal(o, original)
 	if !v1alpha1.ClusterRefsEquals([]v1alpha1.ClusterReference{original.Spec.ClusterRef, instance.Spec.ClusterRef}) {
 		instance.Spec.ClusterRef = original.Spec.ClusterRef
@@ -115,7 +115,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				r.Log.Error("User group is already gone, there is nothing we can do",
 					zap.String("userGroup", instance.Name))
 				if err = r.removeFinalizer(ctx, current); err != nil {
-					return RequeueWithError(r.Log, "failed to remove finalizer for user group "+instance.Name, err)
+					return RequeueWithError(r.Log, "failed to remove finalizer for user group "+current.Name, err)
 				}
 				return Reconciled()
 			}
@@ -125,7 +125,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					userRef.Name, userNamespace))
 
 			// the cluster does not exist - should have been caught pre-flight
-			return RequeueWithError(r.Log, "failed to lookup referenced user "+user.Name+" in group "+instance.Name, err)
+			return RequeueWithError(r.Log, "failed to lookup referenced user "+user.Name+" in group "+current.Name, err)
 		}
 
 		// Check if cluster references are the same
@@ -134,7 +134,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			msg := fmt.Sprintf("Failed to ensure consistency in cluster referece : %s in %s, with user : %s in %s",
 				instance.Spec.ClusterRef.Name, clusterNamespace, userRef.Name, userRef.Namespace)
 			r.Recorder.Event(instance, corev1.EventTypeWarning, "ReferenceClusterError", msg)
-			return RequeueWithError(r.Log, msg, errors.New("inconsistent cluster references"))
+			return RequeueWithError(r.Log, msg, errors.New("inconsistent cluster references for usergroup "+current.Name))
 		}
 
 		users = append(users, user)
@@ -157,7 +157,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				zap.String("userGroup", instance.Name),
 				zap.String("clusterName", clusterRef.Name))
 			if err = r.removeFinalizer(ctx, instance); err != nil {
-				return RequeueWithError(r.Log, "failed to remove finalizer for user group "+instance.Name, err)
+				return RequeueWithError(r.Log, "failed to remove finalizer for user group "+current.Name, err)
 			}
 			return Reconciled()
 		}
@@ -165,10 +165,10 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// If the referenced cluster no more exist, just skip the deletion requirement in cluster ref change case.
 		if !v1alpha1.ClusterRefsEquals([]v1alpha1.ClusterReference{instance.Spec.ClusterRef, current.Spec.ClusterRef}) {
 			if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(current); err != nil {
-				return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+instance.Name, err)
+				return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+current.Name, err)
 			}
 			if err := r.Client.Update(ctx, current); err != nil {
-				return RequeueWithError(r.Log, "failed to update NifiUserGroup "+instance.Name, err)
+				return RequeueWithError(r.Log, "failed to update NifiUserGroup "+current.Name, err)
 			}
 			return RequeueAfter(interval)
 		}
@@ -178,7 +178,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				instance.Spec.ClusterRef.Name, clusterRef.Namespace))
 
 		// the cluster does not exist - should have been caught pre-flight
-		return RequeueWithError(r.Log, "failed to lookup referenced cluster for user group "+instance.Name, err)
+		return RequeueWithError(r.Log, "failed to lookup referenced cluster for user group "+current.Name, err)
 	}
 
 	// Generate the client configuration.
@@ -190,12 +190,12 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// the cluster is gone, so just remove the finalizer
 		if k8sutil.IsMarkedForDeletion(instance.ObjectMeta) {
 			if err = r.removeFinalizer(ctx, instance); err != nil {
-				return RequeueWithError(r.Log, fmt.Sprintf("failed to remove finalizer from NifiUserGroup %s", instance.Name), err)
+				return RequeueWithError(r.Log, fmt.Sprintf("failed to remove finalizer from NifiUserGroup %s", current.Name), err)
 			}
 			return Reconciled()
 		}
 		// the cluster does not exist - should have been caught pre-flight
-		return RequeueWithError(r.Log, "failed to create HTTP client the for referenced cluster "+clusterRef.Name+" for user group "+instance.Name, err)
+		return RequeueWithError(r.Log, "failed to create HTTP client the for referenced cluster "+clusterRef.Name+" for user group "+current.Name, err)
 	}
 
 	// Check if marked for deletion and if so run finalizers
@@ -226,10 +226,10 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// Update the last view configuration to the current one.
 		if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(current); err != nil {
-			return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+instance.Name, err)
+			return RequeueWithError(r.Log, "could not apply last state to annotation for user group "+current.Name, err)
 		}
 		if err := r.Client.Update(ctx, current); err != nil {
-			return RequeueWithError(r.Log, "failed to update NifiUserGroup "+instance.Name, err)
+			return RequeueWithError(r.Log, "failed to update NifiUserGroup "+current.Name, err)
 		}
 		return RequeueAfter(interval)
 	}
@@ -237,44 +237,43 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.Recorder.Event(instance, corev1.EventTypeNormal, "Reconciling",
 		fmt.Sprintf("Reconciling user group %s", instance.Name))
 
-	// Check if the NiFi user group already exist
-	exist, err := usergroup.ExistUserGroup(instance, clientConfig)
+	status, err := usergroup.CreateIfNotExists(instance, users, clientConfig)
 	if err != nil {
-		return RequeueWithError(r.Log, "failure checking for existing user group "+instance.Name, err)
+		return RequeueWithError(r.Log, "failure creating user group "+current.Name, err)
 	}
-
-	if !exist {
-		r.Recorder.Event(instance, corev1.EventTypeNormal, "Creating",
-			fmt.Sprintf("Creating registry client %s", instance.Name))
-
-		// Create NiFi user group
-		status, err := usergroup.CreateUserGroup(instance, users, clientConfig)
-		if err != nil {
-			return RequeueWithError(r.Log, "failure creating user group "+instance.Name, err)
-		}
-
+	if status != nil {
 		instance.Status = *status
 		if err := r.Client.Status().Update(ctx, instance); err != nil {
-			return RequeueWithError(r.Log, "failed to update status for NifiUserGroup "+instance.Name, err)
+			return RequeueWithError(r.Log, "failed to update status for NifiUserGroup "+current.Name, err)
 		}
 
 		r.Recorder.Event(instance, corev1.EventTypeNormal, "Created",
 			fmt.Sprintf("Created user group %s", instance.Name))
+		r.Log.Info("Created user group",
+			zap.String("userGroup", instance.Name),
+			zap.String("clusterName", instance.Spec.ClusterRef.Name))
+	} else {
+		r.Log.Debug("user group already exists. Not creating again.",
+			zap.String("userGroup", instance.Name),
+			zap.String("clusterName", instance.Spec.ClusterRef.Name))
 	}
 
 	// Sync UserGroup resource with NiFi side component
 	r.Recorder.Event(instance, corev1.EventTypeNormal, "Synchronizing",
 		fmt.Sprintf("Synchronizing user group %s", instance.Name))
-	status, err := usergroup.SyncUserGroup(instance, users, clientConfig)
+	status, err = usergroup.SyncUserGroup(instance, users, clientConfig)
 	if err != nil {
 		r.Recorder.Event(instance, corev1.EventTypeNormal, "SynchronizingFailed",
 			fmt.Sprintf("Synchronizing user group %s failed", instance.Name))
-		return RequeueWithError(r.Log, "failed to sync NifiUserGroup "+instance.Name, err)
+		return RequeueWithError(r.Log, "failed to sync NifiUserGroup "+current.Name, err)
+	} else {
+		r.Log.Debug("Successfully synced user group",
+			zap.String("userGroup", instance.Name))
 	}
 
 	instance.Status = *status
 	if err := r.Client.Status().Update(ctx, instance); err != nil {
-		return RequeueWithError(r.Log, "failed to update status for NifiUserGroup "+instance.Name, err)
+		return RequeueWithError(r.Log, "failed to update status for NifiUserGroup "+current.Name, err)
 	}
 
 	r.Recorder.Event(instance, corev1.EventTypeNormal, "Synchronized",
@@ -288,6 +287,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Ensure finalizer for cleanup on deletion
 	if !util.StringSliceContains(instance.GetFinalizers(), userGroupFinalizer) {
 		r.Log.Info("Adding Finalizer for NifiUserGroup",
+			zap.String("clusterName", instance.Spec.ClusterRef.Name),
 			zap.String("userGroup", instance.Name))
 		instance.SetFinalizers(append(instance.GetFinalizers(), userGroupFinalizer))
 	}
@@ -301,6 +301,7 @@ func (r *NifiUserGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		fmt.Sprintf("Reconciling user group %s", instance.Name))
 
 	r.Log.Debug("Ensured User Group",
+		zap.String("clusterName", instance.Spec.ClusterRef.Name),
 		zap.String("userGroup", instance.Name))
 
 	return RequeueAfter(interval)
@@ -344,6 +345,7 @@ func (r *NifiUserGroupReconciler) updateAndFetchLatest(ctx context.Context,
 func (r *NifiUserGroupReconciler) checkFinalizers(ctx context.Context, userGroup *v1alpha1.NifiUserGroup,
 	users []*v1alpha1.NifiUser, config *clientconfig.NifiConfig) (reconcile.Result, error) {
 	r.Log.Info("NiFi user group is marked for deletion. Removing finalizers.",
+		zap.String("clusterName", userGroup.Spec.ClusterRef.Name),
 		zap.String("userGroup", userGroup.Name))
 	var err error
 	if util.StringSliceContains(userGroup.GetFinalizers(), userGroupFinalizer) {
@@ -359,6 +361,7 @@ func (r *NifiUserGroupReconciler) checkFinalizers(ctx context.Context, userGroup
 
 func (r *NifiUserGroupReconciler) removeFinalizer(ctx context.Context, userGroup *v1alpha1.NifiUserGroup) error {
 	r.Log.Debug("Removing finalizer for NifiUserGroup",
+		zap.String("clusterName", userGroup.Spec.ClusterRef.Name),
 		zap.String("userGroup", userGroup.Name))
 	userGroup.SetFinalizers(util.StringSliceRemove(userGroup.GetFinalizers(), userGroupFinalizer))
 	_, err := r.updateAndFetchLatest(ctx, userGroup)
@@ -375,6 +378,7 @@ func (r *NifiUserGroupReconciler) finalizeNifiNifiUserGroup(
 	}
 
 	r.Log.Info("Deleted NifiUserGroup",
+		zap.String("clusterName", userGroup.Spec.ClusterRef.Name),
 		zap.String("userGroup", userGroup.Name))
 
 	return nil

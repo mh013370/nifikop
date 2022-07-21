@@ -19,15 +19,18 @@ func TlsConfig(client client.Client, cluster *v1alpha1.NifiCluster) (config *tls
 		return certmanagerpki.GetControllerTLSConfigFromSecret(client, cluster.Spec.SecretRef)
 	}
 
+	// internal clusters have the same TLS config
 	return pki.GetPKIManager(client, cluster).GetControllerTLSConfig()
 }
 
 func ClusterConfig(cluster *v1alpha1.NifiCluster) *clientconfig.NifiConfig {
 	if cluster.IsExternal() {
 		return externalClusterConfig(cluster)
+	} else if cluster.IsInternal() {
+		return internalClusterConfig(cluster)
+	} else {
+		return standaloneClusterConfig(cluster)
 	}
-
-	return internalClusterConfig(cluster)
 }
 
 func externalClusterConfig(cluster *v1alpha1.NifiCluster) *clientconfig.NifiConfig {
@@ -43,6 +46,8 @@ func externalClusterConfig(cluster *v1alpha1.NifiCluster) *clientconfig.NifiConf
 	conf.NodesContext = make(map[int32]context.Context)
 	conf.ProxyUrl = ref.ProxyUrl
 	conf.UseSSL = true
+	conf.IsStandalone = cluster.IsStandalone()
+	conf.DefaultHeaders = map[string]string{}
 
 	return conf
 }
@@ -56,6 +61,22 @@ func internalClusterConfig(cluster *v1alpha1.NifiCluster) *clientconfig.NifiConf
 	conf.OperationTimeout = clientconfig.NifiDefaultTimeout
 	conf.NodesContext = make(map[int32]context.Context)
 	conf.UseSSL = cluster.Spec.ListenersConfig.SSLSecrets != nil && UseSSL(cluster)
+	conf.IsStandalone = cluster.IsStandalone()
+	conf.DefaultHeaders = map[string]string{}
+	return conf
+}
+
+func standaloneClusterConfig(cluster *v1alpha1.NifiCluster) *clientconfig.NifiConfig {
+	conf := &clientconfig.NifiConfig{}
+	conf.RootProcessGroupId = clientconfig.ROOT_PROCESS_GROUP_ALIAS
+	conf.NodeURITemplate = generateNodesURITemplate(cluster)
+	conf.NodesURI = generateNodesAddress(cluster)
+	conf.NifiURI = nifi.GenerateRequestNiFiAllNodeAddressFromCluster(cluster)
+	conf.OperationTimeout = clientconfig.NifiDefaultTimeout
+	conf.NodesContext = make(map[int32]context.Context)
+	conf.UseSSL = cluster.Spec.ListenersConfig.SSLSecrets != nil && UseSSL(cluster)
+	conf.IsStandalone = cluster.IsStandalone()
+	conf.DefaultHeaders = map[string]string{}
 	return conf
 }
 

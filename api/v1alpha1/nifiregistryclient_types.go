@@ -21,6 +21,8 @@ type NifiRegistryClientSpec struct {
 type NifiRegistryClientStatus struct {
 	// The nifi registry client's id
 	Id string `json:"id"`
+	// the seed used to generate the registry client's ID
+	IdSeed string `json:"idSeed,omitempty"`
 	// The last nifi registry client revision version catched
 	Version int64 `json:"version"`
 }

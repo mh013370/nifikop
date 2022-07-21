@@ -456,7 +456,7 @@ func (r *Reconciler) getAuthorizersConfigString(nConfig *v1alpha1.NodeConfig, id
 	nodeList := make(map[string]string)
 
 	authorizersTemplate := config.EmptyAuthorizersTemplate
-	if r.NifiCluster.Status.NodesState[fmt.Sprint(id)].InitClusterNode {
+	if r.NifiCluster.Status.NodesState[fmt.Sprint(id)].IsInitClusterNode() || r.NifiCluster.IsStandalone() {
 		authorizersTemplate = config.AuthorizersTemplate
 
 		// Check for secret/configmap overrides. If there aren't any, then use the default template.
@@ -483,9 +483,12 @@ func (r *Reconciler) getAuthorizersConfigString(nConfig *v1alpha1.NodeConfig, id
 				zap.Error(err))
 		}
 
-		for nId, nodeState := range r.NifiCluster.Status.NodesState {
-			if nodeState.InitClusterNode {
-				nodeList[nId] = utilpki.GetNodeUserName(r.NifiCluster, util.ConvertStringToInt32(nId))
+		// we only set node identities for clustered nifis
+		if !r.NifiCluster.IsStandalone() {
+			for nId, nodeState := range r.NifiCluster.Status.NodesState {
+				if nodeState.IsInitClusterNode() {
+					nodeList[nId] = utilpki.GetNodeUserName(r.NifiCluster, util.ConvertStringToInt32(nId))
+				}
 			}
 		}
 	}

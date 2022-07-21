@@ -83,6 +83,9 @@ tags
 .vscode
 nifikop.env
 telepresence.log
+.stignore
+okteto.yml
+**/.syncthing*
 
 # Dependencies
 site/node_modules

@@ -7,18 +7,19 @@ import (
 	"github.com/konpyutaika/nifikop/pkg/nificlient"
 	"github.com/konpyutaika/nifikop/pkg/util/clientconfig"
 	nigoapi "github.com/konpyutaika/nigoapi/pkg/nifi"
+	"go.uber.org/zap"
 )
 
 var log = common.CustomLogger().Named("accesspolicies-method")
 
-func ExistAccessPolicies(accessPolicy *v1alpha1.AccessPolicy, config *clientconfig.NifiConfig) (bool, error) {
+func ExistAccessPoliciesWithClient(accessPolicy *v1alpha1.AccessPolicy, config *clientconfig.NifiConfig, client nificlient.ClientContextPair) (bool, error) {
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
 		return false, err
 	}
 
-	entity, err := nClient.GetAccessPolicy(string(accessPolicy.Action), accessPolicy.GetResource(config.RootProcessGroupId))
+	entity, err := nClient.GetAccessPolicyWithClient(string(accessPolicy.Action), accessPolicy.GetResource(config.RootProcessGroupId), client)
 	if err := clientwrappers.ErrorGetOperation(log, err, "Get access policy"); err != nil {
 		if err == nificlient.ErrNifiClusterReturned404 {
 			return false, nil
@@ -26,10 +27,10 @@ func ExistAccessPolicies(accessPolicy *v1alpha1.AccessPolicy, config *clientconf
 		return false, err
 	}
 
-	return entity != nil, nil
+	return entity != nil && entity.Entity != nil && entity.Entity.Id != "", nil
 }
 
-func CreateAccessPolicy(accessPolicy *v1alpha1.AccessPolicy, config *clientconfig.NifiConfig) (string, error) {
+func CreateAccessPolicyWithClient(accessPolicy *v1alpha1.AccessPolicy, config *clientconfig.NifiConfig, client nificlient.ClientContextPair) (string, error) {
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
@@ -44,72 +45,88 @@ func CreateAccessPolicy(accessPolicy *v1alpha1.AccessPolicy, config *clientconfi
 		config,
 		&scratchEntity)
 
-	entity, err := nClient.CreateAccessPolicy(scratchEntity)
+	entity, err := nClient.CreateAccessPolicyWithClient(scratchEntity, client)
 	if err := clientwrappers.ErrorCreateOperation(log, err, "Access policy user"); err != nil {
 		return "", err
 	}
 
-	return entity.Id, nil
+	return entity.Entity.Id, nil
 }
 
-func UpdateAccessPolicy(
+func UpdateAccessPolicyWithClient(
 	accessPolicy *v1alpha1.AccessPolicy,
 	addUsers []*v1alpha1.NifiUser,
 	removeUsers []*v1alpha1.NifiUser,
 	addUserGroups []*v1alpha1.NifiUserGroup,
 	removeUserGroups []*v1alpha1.NifiUserGroup,
-	config *clientconfig.NifiConfig) error {
+	config *clientconfig.NifiConfig,
+	client nificlient.ClientContextPair) error {
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
 		return err
 	}
 
+	log.Info("Updating access policy",
+		zap.Int32("nodeId", client.NodeId),
+		zap.String("accessResource", string(accessPolicy.Resource)),
+		zap.String("accessAction", string(accessPolicy.Action)),
+		zap.String("rootPgId", config.RootProcessGroupId),
+		zap.String("accessType", string(accessPolicy.Type)))
+
 	// Check if the access policy  exist
-	exist, err := ExistAccessPolicies(accessPolicy, config)
+	exist, err := ExistAccessPoliciesWithClient(accessPolicy, config, client)
 	if err != nil {
 		return err
 	}
 
 	if !exist {
-		_, err := CreateAccessPolicy(accessPolicy, config)
+		log.Info("Creating access policy, as it does not exist",
+			zap.Int32("nodeId", client.NodeId),
+			zap.String("accessResource", string(accessPolicy.Resource)),
+			zap.String("accessAction", string(accessPolicy.Action)),
+			zap.String("rootPgId", config.RootProcessGroupId),
+			zap.String("accessType", string(accessPolicy.Type)))
+		_, err = CreateAccessPolicyWithClient(accessPolicy, config, client)
 		if err != nil {
 			return err
 		}
 	}
 
-	entity, err := nClient.GetAccessPolicy(string(accessPolicy.Action), accessPolicy.GetResource(config.RootProcessGroupId))
+	entity, err := nClient.GetAccessPolicyWithClient(string(accessPolicy.Action), accessPolicy.GetResource(config.RootProcessGroupId), client)
 	if err := clientwrappers.ErrorGetOperation(log, err, "Get access policy"); err != nil {
 		return err
 	}
 
-	updateAccessPolicyEntity(accessPolicy, addUsers, removeUsers, addUserGroups, removeUserGroups, config, entity)
-	entity, err = nClient.UpdateAccessPolicy(*entity)
-	return clientwrappers.ErrorUpdateOperation(log, err, "Update user")
+	updateAccessPolicyEntity(accessPolicy, addUsers, removeUsers, addUserGroups, removeUserGroups, config, entity.Entity)
+	_, err = nClient.UpdateAccessPolicyWithClient(*entity.Entity, client)
+	return clientwrappers.ErrorUpdateOperation(log, err, "Update access policy")
 }
 
-func UpdateAccessPolicyEntity(
+func UpdateAccessPolicyEntityWithClient(
 	entity *nigoapi.AccessPolicyEntity,
 	addUsers []*v1alpha1.NifiUser,
 	removeUsers []*v1alpha1.NifiUser,
 	addUserGroups []*v1alpha1.NifiUserGroup,
 	removeUserGroups []*v1alpha1.NifiUserGroup,
-	config *clientconfig.NifiConfig) error {
+	config *clientconfig.NifiConfig,
+	client nificlient.ClientContextPair) error {
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
 		return err
 	}
 
-	entity, err = nClient.GetAccessPolicy(entity.Component.Action, entity.Component.Resource)
+	updatedEntity, err := nClient.GetAccessPolicyWithClient(entity.Component.Action, entity.Component.Resource, client)
 	if err := clientwrappers.ErrorGetOperation(log, err, "Get access policy"); err != nil {
 		return err
 	}
+	entity = updatedEntity.Entity
 
 	addRemoveUsersFromAccessPolicyEntity(addUsers, removeUsers, entity)
 	addRemoveUserGroupsFromAccessPolicyEntity(addUserGroups, removeUserGroups, entity)
 
-	entity, err = nClient.UpdateAccessPolicy(*entity)
+	_, err = nClient.UpdateAccessPolicyWithClient(*entity, client)
 	return clientwrappers.ErrorUpdateOperation(log, err, "Update user")
 }
 
@@ -152,6 +169,10 @@ func addRemoveUserGroupsFromAccessPolicyEntity(
 
 	// Add new userGroup from the access policy
 	for _, userGroup := range addUserGroups {
+		log.Info("Adding user group to access policy",
+			zap.String("userGroup", userGroup.Name),
+			zap.String("policy", entity.Component.Resource),
+		)
 		entity.Component.UserGroups = append(entity.Component.UserGroups, nigoapi.TenantEntity{Id: userGroup.Status.Id})
 	}
 
@@ -181,6 +202,10 @@ func addRemoveUsersFromAccessPolicyEntity(
 
 	// Add new user from the access policy
 	for _, user := range addUsers {
+		log.Info("Adding user to access policy",
+			zap.String("user", user.Name),
+			zap.String("policy", entity.Component.Resource),
+		)
 		entity.Component.Users = append(entity.Component.Users, nigoapi.TenantEntity{Id: user.Status.Id})
 	}
 

@@ -1,6 +1,8 @@
 package parametercontext
 
 import (
+	"fmt"
+
 	"github.com/konpyutaika/nifikop/api/v1alpha1"
 	"github.com/konpyutaika/nifikop/pkg/clientwrappers"
 	"github.com/konpyutaika/nifikop/pkg/common"
@@ -13,29 +15,55 @@ import (
 
 var log = common.CustomLogger().Named("parametercontext-method")
 
-func ExistParameterContext(parameterContext *v1alpha1.NifiParameterContext, config *clientconfig.NifiConfig) (bool, error) {
-
-	if parameterContext.Status.Id == "" {
-		return false, nil
+func CreateIfNotExists(parameterContext *v1alpha1.NifiParameterContext, parameterSecrets []*corev1.Secret, parameterContextRefs []*v1alpha1.NifiParameterContext, config *clientconfig.NifiConfig) (*v1alpha1.NifiParameterContextStatus, error) {
+	// set the seed header if it exists in the parameter context status
+	if parameterContext.Status.IdSeed != "" {
+		config.DefaultHeaders[clientconfig.CLUSTER_ID_GENERATION_SEED_HEADER] = parameterContext.Status.IdSeed
 	}
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	entity, err := nClient.GetParameterContext(parameterContext.Status.Id)
-	if err := clientwrappers.ErrorGetOperation(log, err, "Get parameter-context"); err != nil {
-		if err == nificlient.ErrNifiClusterReturned404 {
-			return false, nil
+	status, err := findParameterContextByName(parameterContext, config)
+	if err := clientwrappers.ErrorGetOperation(log, err, "find parameter context by name"); err != nil {
+		return nil, err
+	}
+	// TakeOver disabled
+	if status != nil && !parameterContext.Spec.IsTakeOverEnabled() {
+		return nil, fmt.Errorf("parameter context name %s already used and takeOver disabled", parameterContext.Name)
+	}
+
+	// if the parameter context id hasn't been set, then it hasn't been created. Create it.
+	if parameterContext.Status.Id == "" {
+		status, err := CreateParameterContext(parameterContext, parameterSecrets, parameterContextRefs, config)
+		if err != nil {
+			return nil, err
 		}
-		return false, err
+		return status, nil
 	}
 
-	return entity != nil, nil
+	// double check that the parameter context exists at each configured client
+	entities, err := nClient.GetParameterContext(parameterContext.Status.Id)
+	if err := clientwrappers.ErrorGetOperation(log, err, "get parameter context"); err != nil {
+		return nil, err
+	}
+	var retStatus *v1alpha1.NifiParameterContextStatus
+	for _, entity := range entities {
+		if entity == nil || entity.Entity == nil {
+			status, err := CreateParameterContextWithClient(parameterContext, parameterSecrets, parameterContextRefs, config, entity.Client)
+			if err != nil {
+				return nil, err
+			}
+			retStatus = status
+		}
+	}
+
+	return retStatus, nil
 }
 
-func FindParameterContextByName(parameterContext *v1alpha1.NifiParameterContext, config *clientconfig.NifiConfig) (*v1alpha1.NifiParameterContextStatus, error) {
+func findParameterContextByName(parameterContext *v1alpha1.NifiParameterContext, config *clientconfig.NifiConfig) (*v1alpha1.NifiParameterContextStatus, error) {
 
 	nClient, err := common.NewClusterConnection(log, config)
 	if err != nil {
@@ -50,12 +78,15 @@ func FindParameterContextByName(parameterContext *v1alpha1.NifiParameterContext,
 		return nil, err
 	}
 
-	for _, entity := range entities {
-		if parameterContext.GetName() == entity.Component.Name {
-			return &v1alpha1.NifiParameterContextStatus{
-				Id:      entity.Id,
-				Version: *entity.Revision.Version,
-			}, nil
+	for _, entityPair := range entities {
+		paramContexts := entityPair.Entity
+		for _, entity := range *paramContexts {
+			if parameterContext.GetName() == entity.Component.Name {
+				return &v1alpha1.NifiParameterContextStatus{
+					Id:      entity.Id,
+					Version: *entity.Revision.Version,
+				}, nil
+			}
 		}
 	}
 
@@ -76,13 +107,38 @@ func CreateParameterContext(
 	scratchEntity := nigoapi.ParameterContextEntity{}
 	updateParameterContextEntity(parameterContext, parameterSecrets, parameterContextRefs, &scratchEntity)
 
-	entity, err := nClient.CreateParameterContext(scratchEntity)
+	entities, err := nClient.CreateParameterContext(scratchEntity)
 	if err := clientwrappers.ErrorCreateOperation(log, err, "Create parameter-context"); err != nil {
 		return nil, err
 	}
 
-	parameterContext.Status.Id = entity.Id
-	parameterContext.Status.Version = *entity.Revision.Version
+	// all paramter contexts will be the same, so just grab the first status
+	parameterContext.Status.Id = entities[0].Entity.Id
+	parameterContext.Status.IdSeed = config.GetIDSeedHeader()
+	parameterContext.Status.Version = *entities[0].Entity.Revision.Version
+
+	return &parameterContext.Status, nil
+}
+
+func CreateParameterContextWithClient(parameterContext *v1alpha1.NifiParameterContext, parameterSecrets []*corev1.Secret,
+	parameterContextRefs []*v1alpha1.NifiParameterContext, config *clientconfig.NifiConfig, client nificlient.ClientContextPair) (*v1alpha1.NifiParameterContextStatus, error) {
+
+	nClient, err := common.NewClusterConnection(log, config)
+	if err != nil {
+		return nil, err
+	}
+
+	scratchEntity := nigoapi.ParameterContextEntity{}
+	updateParameterContextEntity(parameterContext, parameterSecrets, parameterContextRefs, &scratchEntity)
+
+	entity, err := nClient.CreateParameterContextWithClient(scratchEntity, client)
+	if err := clientwrappers.ErrorCreateOperation(log, err, "Create parameter-context"); err != nil {
+		return nil, err
+	}
+
+	parameterContext.Status.Id = entity.Entity.Id
+	parameterContext.Status.IdSeed = config.GetIDSeedHeader()
+	parameterContext.Status.Version = *entity.Entity.Revision.Version
 
 	return &parameterContext.Status, nil
 }
@@ -98,45 +154,51 @@ func SyncParameterContext(
 		return nil, err
 	}
 
-	entity, err := nClient.GetParameterContext(parameterContext.Status.Id)
+	entities, err := nClient.GetParameterContext(parameterContext.Status.Id)
 	if err := clientwrappers.ErrorGetOperation(log, err, "Get parameter-context"); err != nil {
 		return nil, err
 	}
 
-	latestUpdateRequest := parameterContext.Status.LatestUpdateRequest
-	if latestUpdateRequest != nil && !latestUpdateRequest.Complete {
-		updateRequest, err := nClient.GetParameterContextUpdateRequest(parameterContext.Status.Id, latestUpdateRequest.Id)
-		if updateRequest != nil {
-			parameterContext.Status.LatestUpdateRequest = updateRequest2Status(updateRequest)
+	var status *v1alpha1.NifiParameterContextStatus
+	for _, entityPair := range entities {
+		// If the parameter context is not returned, then either it hasn't been fully created or nifikop doesn't yet have permission to view the PC
+		if entityPair == nil || entityPair.Entity == nil {
+			return nil, errorfactory.NifiParameterContextSyncing{}
 		}
 
-		if err := clientwrappers.ErrorGetOperation(log, err, "Get update-request"); err != nificlient.ErrNifiClusterReturned404 {
-			if err != nil {
-				return &parameterContext.Status, err
+		latestUpdateRequest := parameterContext.Status.LatestUpdateRequest
+		if latestUpdateRequest != nil && !latestUpdateRequest.Complete {
+			updateRequest, err := nClient.GetParameterContextUpdateRequestWithClient(parameterContext.Status.Id, latestUpdateRequest.Id, entityPair.Client)
+			if updateRequest.Entity != nil {
+				parameterContext.Status.LatestUpdateRequest = updateRequest2Status(updateRequest.Entity)
 			}
+
+			if err := clientwrappers.ErrorGetOperation(log, err, "Get update-request"); err != nificlient.ErrNifiClusterReturned404 {
+				if err != nil {
+					return &parameterContext.Status, err
+				}
+				return &parameterContext.Status, errorfactory.NifiParameterContextUpdateRequestRunning{}
+			}
+		}
+
+		entity := entityPair.Entity
+		if !parameterContextIsSync(parameterContext, parameterSecrets, parameterContextRefs, entity) {
+			entity.Component.Parameters = updateRequestPrepare(parameterContext, parameterSecrets, parameterContextRefs, entity)
+
+			updateRequest, err := nClient.CreateParameterContextUpdateRequestWithClient(entity.Id, *entity, entityPair.Client)
+			if err := clientwrappers.ErrorCreateOperation(log, err, "Create parameter-context update-request"); err != nil {
+				return nil, err
+			}
+
+			parameterContext.Status.LatestUpdateRequest = updateRequest2Status(updateRequest.Entity)
 			return &parameterContext.Status, errorfactory.NifiParameterContextUpdateRequestRunning{}
 		}
-	}
 
-	if !parameterContextIsSync(parameterContext, parameterSecrets, parameterContextRefs, entity) {
-
-		entity.Component.Parameters = updateRequestPrepare(parameterContext, parameterSecrets, parameterContextRefs, entity)
-
-		updateRequest, err := nClient.CreateParameterContextUpdateRequest(entity.Id, *entity)
-		if err := clientwrappers.ErrorCreateOperation(log, err, "Create parameter-context update-request"); err != nil {
-			return nil, err
+		if parameterContext.Status.Version != *entity.Revision.Version || parameterContext.Status.Id != entity.Id {
+			status = &parameterContext.Status
+			status.Version = *entity.Revision.Version
+			status.Id = entity.Id
 		}
-
-		parameterContext.Status.LatestUpdateRequest =
-			updateRequest2Status(updateRequest)
-		return &parameterContext.Status, errorfactory.NifiParameterContextUpdateRequestRunning{}
-	}
-
-	var status *v1alpha1.NifiParameterContextStatus
-	if parameterContext.Status.Version != *entity.Revision.Version || parameterContext.Status.Id != entity.Id {
-		status := &parameterContext.Status
-		status.Version = *entity.Revision.Version
-		status.Id = entity.Id
 	}
 
 	return status, nil
@@ -153,7 +215,7 @@ func RemoveParameterContext(
 		return err
 	}
 
-	entity, err := nClient.GetParameterContext(parameterContext.Status.Id)
+	entities, err := nClient.GetParameterContext(parameterContext.Status.Id)
 	if err := clientwrappers.ErrorGetOperation(log, err, "Failed to fetch parameter-context for removal: "+parameterContext.Name); err != nil {
 		if err == nificlient.ErrNifiClusterReturned404 {
 			return nil
@@ -161,17 +223,26 @@ func RemoveParameterContext(
 		return err
 	}
 
-	updateParameterContextEntity(parameterContext, parameterSecrets, parameterContextRefs, entity)
-	err = nClient.RemoveParameterContext(*entity)
+	for _, entityPair := range entities {
+		if entityPair != nil && entityPair.Entity != nil {
+			entity := entityPair.Entity
+			// if there's not a parameter context for this specific client, just skip
+			if entity == nil {
+				continue
+			}
+			updateParameterContextEntity(parameterContext, parameterSecrets, parameterContextRefs, entity)
+			err = nClient.RemoveParameterContextWithClient(*entity, entityPair.Client)
+			if err != nil {
+				return clientwrappers.ErrorRemoveOperation(log, err, "Failed to remove parameter-context "+parameterContext.Name)
+			}
+		}
+	}
 
-	return clientwrappers.ErrorRemoveOperation(log, err, "Failed to remove parameter-context "+parameterContext.Name)
+	return nil
 }
 
-func parameterContextIsSync(
-	parameterContext *v1alpha1.NifiParameterContext,
-	parameterSecrets []*corev1.Secret,
-	parameterContextRefs []*v1alpha1.NifiParameterContext,
-	entity *nigoapi.ParameterContextEntity) bool {
+func parameterContextIsSync(parameterContext *v1alpha1.NifiParameterContext, parameterSecrets []*corev1.Secret,
+	parameterContextRefs []*v1alpha1.NifiParameterContext, entity *nigoapi.ParameterContextEntity) bool {
 
 	e := nigoapi.ParameterContextEntity{}
 	updateParameterContextEntity(parameterContext, parameterSecrets, parameterContextRefs, &e)

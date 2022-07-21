@@ -30,7 +30,7 @@ func TestUpdatePortRunStatus(t *testing.T) {
 	assert.Nil(entity)
 }
 
-func testUpdatePortRunStatus(t *testing.T, entity nigoapi.PortRunStatusEntity, id string, status int) (*nigoapi.ProcessorEntity, error) {
+func testUpdatePortRunStatus(t *testing.T, entity nigoapi.PortRunStatusEntity, id string, status int) ([]*ClientEntityPair[nigoapi.ProcessorEntity], error) {
 
 	cluster := testClusterMock(t)
 
